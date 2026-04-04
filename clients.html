@@ -167,7 +167,6 @@
       </div>
       <div class="nav-links">
         <a href="dashboard.html">Painel</a>
-        <a href="index.html">Landing</a>
         <a href="app.html">Orcamentos</a>
         <a href="clients.html">Clientes</a>
         <a href="agendamentos.html">Agendamentos</a>
@@ -235,7 +234,10 @@
         <h2>Clientes cadastrados</h2>
         <div class="actions" style="margin-top: 10px;">
           <button id="refresh-clients" type="button" class="secondary">Atualizar lista</button>
+          <button id="sync-pending" type="button" class="secondary">Sincronizar pendentes</button>
         </div>
+        <div id="pending-summary" class="small-note" style="margin-top: 14px;">Nenhum cliente pendente de sincronizacao.</div>
+        <div id="pending-list" class="client-list" style="margin-top: 14px;"></div>
         <div id="client-list" class="client-list">
           <div class="empty">Nenhum cliente carregado ainda.</div>
         </div>
@@ -249,7 +251,11 @@
     const apiStatus = document.getElementById('api-status');
     const flash = document.getElementById('flash');
     const clientList = document.getElementById('client-list');
+    const pendingList = document.getElementById('pending-list');
+    const pendingSummary = document.getElementById('pending-summary');
+    const PENDING_CLIENTS_KEY = 'homewash.pendingClients';
     let cachedClients = [];
+    let apiAvailable = false;
 
     function normalizeBaseUrl(url) {
       return auth.normalizeBaseUrl(url);
@@ -267,6 +273,62 @@
     function setApiStatus(ok, label) {
       apiStatus.textContent = label;
       apiStatus.classList.toggle('offline', !ok);
+    }
+
+    function getPendingClients() {
+      try {
+        const raw = localStorage.getItem(PENDING_CLIENTS_KEY) || '[]';
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function setPendingClients(items) {
+      localStorage.setItem(PENDING_CLIENTS_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+    }
+
+    function renderPendingClients() {
+      const items = getPendingClients();
+      if (!items.length) {
+        pendingSummary.textContent = apiAvailable
+          ? 'Nenhum cliente pendente de sincronizacao.'
+          : 'Modo offline ativo. Nenhum cliente pendente salvo neste navegador.';
+        pendingList.innerHTML = '';
+        return;
+      }
+
+      pendingSummary.textContent = apiAvailable
+        ? `${items.length} cliente(s) pendente(s) pronto(s) para sincronizar.`
+        : `${items.length} cliente(s) salvo(s) offline neste navegador.`;
+
+      pendingList.innerHTML = items.map((item) => `
+        <article class="client-card">
+          <strong>${item.payload?.nome || 'Cliente sem nome'}</strong>
+          <span class="client-meta">Criado offline em ${new Date(item.created_at).toLocaleString('pt-BR')}</span>
+          <span class="client-meta">Telefone: ${item.payload?.telefone || '-'}</span>
+          <span class="client-meta">E-mail: ${item.payload?.email || '-'}</span>
+          <span class="client-meta">Endereco: ${item.payload?.endereco || '-'}</span>
+        </article>
+      `).join('');
+    }
+
+    function queueClient(payload) {
+      const queue = getPendingClients();
+      queue.unshift({
+        local_id: `client-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        created_at: new Date().toISOString(),
+        payload,
+      });
+      setPendingClients(queue);
+      renderPendingClients();
+    }
+
+    function shouldQueueOffline(error) {
+      if (!apiAvailable) return true;
+      const message = String(error && error.message || '');
+      return /Failed to fetch|NetworkError|Load failed|URL da API/i.test(message);
     }
 
     async function apiFetch(path, options = {}) {
@@ -357,25 +419,75 @@
     async function testApi() {
       try {
         await apiFetch('/health');
+        apiAvailable = true;
         setApiStatus(true, 'API conectada');
         await loadClients();
+        renderPendingClients();
         setFlash('API pronta para o modulo de clientes.', 'success');
       } catch (error) {
+        apiAvailable = false;
         setApiStatus(false, 'API desconectada');
         renderClients([]);
-        setFlash(error.message, 'error');
+        renderPendingClients();
+        setFlash('API indisponivel. Voce ainda pode salvar clientes offline.', 'error');
       }
     }
 
     async function saveClient() {
       try {
         const payload = currentClientPayload();
+        if (!apiAvailable) {
+          queueClient(payload);
+          setFlash(`Cliente ${payload.nome} salvo offline para sincronizar depois.`, 'success');
+          resetForm();
+          return;
+        }
+
         await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
         await loadClients();
+        renderPendingClients();
         setFlash(`Cliente ${payload.nome} salvo com sucesso.`, 'success');
+        resetForm();
       } catch (error) {
+        if (shouldQueueOffline(error)) {
+          const payload = currentClientPayload();
+          apiAvailable = false;
+          setApiStatus(false, 'API desconectada');
+          queueClient(payload);
+          setFlash(`Cliente ${payload.nome} salvo offline para sincronizar depois.`, 'success');
+          resetForm();
+          return;
+        }
         setFlash(error.message, 'error');
       }
+    }
+
+    async function syncPendingClients() {
+      const queue = getPendingClients();
+      if (!queue.length) {
+        setFlash('Nao ha clientes pendentes para sincronizar.', 'success');
+        return;
+      }
+      if (!apiAvailable) {
+        setFlash('A sincronizacao precisa de API online.', 'error');
+        return;
+      }
+
+      const remaining = [];
+      let synced = 0;
+      for (const item of queue) {
+        try {
+          await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(item.payload) });
+          synced += 1;
+        } catch (error) {
+          remaining.push(item);
+        }
+      }
+
+      setPendingClients(remaining);
+      renderPendingClients();
+      await loadClients();
+      setFlash(remaining.length ? `${synced} cliente(s) sincronizado(s). ${remaining.length} ainda pendente(s).` : `${synced} cliente(s) sincronizado(s) com sucesso.`, 'success');
     }
 
     apiInput.value = getDefaultApiUrl();
@@ -392,12 +504,15 @@
     document.getElementById('refresh-clients').addEventListener('click', async () => {
       try {
         await loadClients();
+        renderPendingClients();
         setFlash('Lista de clientes atualizada.', 'success');
       } catch (error) {
         setFlash(error.message, 'error');
       }
     });
+    document.getElementById('sync-pending').addEventListener('click', syncPendingClients);
     document.getElementById('criado-por').value = 'Operacao Local';
+    renderPendingClients();
     testApi();
   </script>
 </body>

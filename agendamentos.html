@@ -182,7 +182,6 @@
       </div>
       <div class="nav-links">
         <a href="dashboard.html">Painel</a>
-        <a href="index.html">Landing</a>
         <a href="app.html">Orcamentos</a>
         <a href="clients.html">Clientes</a>
         <a href="agendamentos.html">Agendamentos</a>
@@ -214,7 +213,8 @@
         <div class="grid-two">
           <div class="field full">
             <label for="cliente">Cliente</label>
-            <select id="cliente"></select>
+            <input id="cliente" list="clientes-list" type="text" placeholder="Nome do cliente" />
+            <datalist id="clientes-list"></datalist>
           </div>
 
           <div class="field">
@@ -272,7 +272,10 @@
         <h2>Agendamentos recentes</h2>
         <div class="actions" style="margin-top: 10px;">
           <button id="refresh-schedules" type="button" class="secondary">Atualizar lista</button>
+          <button id="sync-pending" type="button" class="secondary">Sincronizar pendentes</button>
         </div>
+        <div id="pending-summary" class="small-note" style="margin-top: 14px;">Nenhum agendamento pendente de sincronizacao.</div>
+        <div id="pending-list" class="schedule-list" style="margin-top: 14px;"></div>
         <div id="schedule-list" class="schedule-list">
           <div class="empty">Nenhum agendamento carregado ainda.</div>
         </div>
@@ -286,9 +289,15 @@
     const apiStatus = document.getElementById('api-status');
     const flash = document.getElementById('flash');
     const scheduleList = document.getElementById('schedule-list');
-    const clientSelect = document.getElementById('cliente');
+    const pendingList = document.getElementById('pending-list');
+    const pendingSummary = document.getElementById('pending-summary');
+    const clientInput = document.getElementById('cliente');
+    const clientList = document.getElementById('clientes-list');
+    const PENDING_CLIENTS_KEY = 'homewash.pendingClients';
+    const PENDING_SCHEDULES_KEY = 'homewash.pendingSchedules';
     let cachedClients = [];
     let cachedSchedules = [];
+    let apiAvailable = false;
 
     function normalizeBaseUrl(url) {
       return auth.normalizeBaseUrl(url);
@@ -306,6 +315,72 @@
     function setApiStatus(ok, label) {
       apiStatus.textContent = label;
       apiStatus.classList.toggle('offline', !ok);
+    }
+
+    function getPendingClients() {
+      try {
+        const raw = localStorage.getItem(PENDING_CLIENTS_KEY) || '[]';
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function getPendingSchedules() {
+      try {
+        const raw = localStorage.getItem(PENDING_SCHEDULES_KEY) || '[]';
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function setPendingSchedules(items) {
+      localStorage.setItem(PENDING_SCHEDULES_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+    }
+
+    function renderPendingSchedules() {
+      const items = getPendingSchedules();
+      if (!items.length) {
+        pendingSummary.textContent = apiAvailable
+          ? 'Nenhum agendamento pendente de sincronizacao.'
+          : 'Modo offline ativo. Nenhum agendamento pendente salvo neste navegador.';
+        pendingList.innerHTML = '';
+        return;
+      }
+
+      pendingSummary.textContent = apiAvailable
+        ? `${items.length} agendamento(s) pendente(s) pronto(s) para sincronizar.`
+        : `${items.length} agendamento(s) salvo(s) offline neste navegador.`;
+
+      pendingList.innerHTML = items.map((item) => `
+        <article class="schedule-card">
+          <strong>${item.payload?.cliente || 'Cliente sem nome'}</strong>
+          <span class="schedule-meta">Criado offline em ${new Date(item.created_at).toLocaleString('pt-BR')}</span>
+          <span class="schedule-meta">Data: ${item.payload?.data_agendada || '-'} | Horario: ${item.payload?.horario || '-'} | Periodo: ${item.payload?.periodo || '-'}</span>
+          <span class="schedule-meta">Responsavel: ${item.payload?.responsavel_nome || '-'} | E-mail: ${item.payload?.responsavel_email || '-'}</span>
+        </article>
+      `).join('');
+    }
+
+    function queueSchedule(payload) {
+      const queue = getPendingSchedules();
+      queue.unshift({
+        local_id: `schedule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        created_at: new Date().toISOString(),
+        payload,
+      });
+      setPendingSchedules(queue);
+      renderPendingSchedules();
+      renderClientSuggestions();
+    }
+
+    function shouldQueueOffline(error) {
+      if (!apiAvailable) return true;
+      const message = String(error && error.message || '');
+      return /Failed to fetch|NetworkError|Load failed|URL da API/i.test(message);
     }
 
     function brDateToInput(value) {
@@ -352,7 +427,7 @@
       const horario = document.getElementById('horario').value.trim();
       return {
         id: Number(document.getElementById('schedule-id').value || '0'),
-        cliente: clientSelect.value,
+        cliente: clientInput.value.trim(),
         data_agendada: inputDateToBr(document.getElementById('data-agendada').value),
         horario,
         periodo: document.getElementById('periodo').value || inferPeriodo(horario),
@@ -363,13 +438,16 @@
       };
     }
 
-    function renderClientsSelect(items) {
-      clientSelect.innerHTML = '<option value="">Selecione um cliente</option>';
-      items.forEach((item) => {
+    function renderClientSuggestions() {
+      const names = new Set();
+      cachedClients.forEach((item) => names.add(String(item.nome || '').trim()));
+      getPendingClients().forEach((item) => names.add(String(item.payload?.nome || '').trim()));
+
+      clientList.innerHTML = '';
+      Array.from(names).filter(Boolean).sort().forEach((name) => {
         const option = document.createElement('option');
-        option.value = item.nome || '';
-        option.textContent = item.nome || 'Cliente sem nome';
-        clientSelect.appendChild(option);
+        option.value = name;
+        clientList.appendChild(option);
       });
     }
 
@@ -431,7 +509,7 @@
     async function loadClients() {
       const payload = await apiFetch('/api/clients');
       cachedClients = payload.data || [];
-      renderClientsSelect(cachedClients);
+      renderClientSuggestions();
     }
 
     async function loadSchedules() {
@@ -443,19 +521,34 @@
     async function testApi() {
       try {
         await apiFetch('/health');
+        apiAvailable = true;
         setApiStatus(true, 'API conectada');
         await Promise.all([loadClients(), loadSchedules()]);
+        renderPendingSchedules();
         setFlash('API pronta para o modulo de agendamentos.', 'success');
       } catch (error) {
+        apiAvailable = false;
         setApiStatus(false, 'API desconectada');
         renderSchedules([]);
-        setFlash(error.message, 'error');
+        renderClientSuggestions();
+        renderPendingSchedules();
+        setFlash('API indisponivel. Voce ainda pode salvar agendamentos offline.', 'error');
       }
     }
 
     async function saveSchedule() {
       try {
         const payload = currentSchedulePayload();
+        if (!apiAvailable && payload.id > 0) {
+          setFlash('Edicoes de agendamento exigem API online.', 'error');
+          return;
+        }
+        if (!apiAvailable) {
+          queueSchedule(payload);
+          setFlash(`Agendamento de ${payload.cliente} salvo offline para sincronizar depois.`, 'success');
+          resetForm();
+          return;
+        }
         if (payload.id > 0) {
           await apiFetch('/api/schedules', { method: 'PUT', body: JSON.stringify(payload) });
           setFlash(`Agendamento #${payload.id} atualizado com sucesso.`, 'success');
@@ -466,8 +559,49 @@
         await loadSchedules();
         resetForm();
       } catch (error) {
+        if (shouldQueueOffline(error)) {
+          const payload = currentSchedulePayload();
+          if (payload.id > 0) {
+            setFlash('Edicoes de agendamento exigem API online.', 'error');
+            return;
+          }
+          apiAvailable = false;
+          setApiStatus(false, 'API desconectada');
+          queueSchedule(payload);
+          setFlash(`Agendamento de ${payload.cliente} salvo offline para sincronizar depois.`, 'success');
+          resetForm();
+          return;
+        }
         setFlash(error.message, 'error');
       }
+    }
+
+    async function syncPendingSchedules() {
+      const queue = getPendingSchedules();
+      if (!queue.length) {
+        setFlash('Nao ha agendamentos pendentes para sincronizar.', 'success');
+        return;
+      }
+      if (!apiAvailable) {
+        setFlash('A sincronizacao precisa de API online.', 'error');
+        return;
+      }
+
+      const remaining = [];
+      let synced = 0;
+      for (const item of queue) {
+        try {
+          await apiFetch('/api/schedules', { method: 'POST', body: JSON.stringify(item.payload) });
+          synced += 1;
+        } catch (error) {
+          remaining.push(item);
+        }
+      }
+
+      setPendingSchedules(remaining);
+      renderPendingSchedules();
+      await loadSchedules();
+      setFlash(remaining.length ? `${synced} agendamento(s) sincronizado(s). ${remaining.length} ainda pendente(s).` : `${synced} agendamento(s) sincronizado(s) com sucesso.`, 'success');
     }
 
     apiInput.value = getDefaultApiUrl();
@@ -484,15 +618,19 @@
     document.getElementById('refresh-schedules').addEventListener('click', async () => {
       try {
         await loadSchedules();
+        renderPendingSchedules();
         setFlash('Lista de agendamentos atualizada.', 'success');
       } catch (error) {
         setFlash(error.message, 'error');
       }
     });
+    document.getElementById('sync-pending').addEventListener('click', syncPendingSchedules);
     document.getElementById('horario').addEventListener('change', (event) => {
       document.getElementById('periodo').value = inferPeriodo(event.target.value);
     });
     document.getElementById('responsavel-nome').value = 'Operacao Local';
+    renderClientSuggestions();
+    renderPendingSchedules();
     testApi();
   </script>
 </body>
