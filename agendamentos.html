@@ -179,6 +179,9 @@
       font: inherit;
       cursor: pointer;
     }
+    .saved-client-select {
+      margin-top: 10px;
+    }
     .empty { color: var(--muted); padding: 14px 0; }
     @media (max-width: 980px) {
       .layout, .grid-two { grid-template-columns: 1fr; }
@@ -226,6 +229,13 @@
         <input id="schedule-id" type="hidden" />
 
         <div class="grid-two">
+          <div class="field full">
+            <label for="cliente-saved">Cliente salvo</label>
+            <select id="cliente-saved" class="saved-client-select">
+              <option value="">Selecionar cliente ja cadastrado</option>
+            </select>
+          </div>
+
           <div class="field full">
             <label for="cliente">Cliente</label>
             <input id="cliente" list="clientes-list" type="text" placeholder="Nome do cliente" />
@@ -308,6 +318,7 @@
     const scheduleList = document.getElementById('schedule-list');
     const pendingList = document.getElementById('pending-list');
     const pendingSummary = document.getElementById('pending-summary');
+    const clientSavedSelect = document.getElementById('cliente-saved');
     const clientInput = document.getElementById('cliente');
     const clientList = document.getElementById('clientes-list');
     const clientShortcuts = document.getElementById('client-shortcuts');
@@ -384,6 +395,7 @@
     }
 
     function queueSchedule(payload) {
+      auth.rememberClientName(payload && payload.cliente);
       const queue = getPendingSchedules();
       queue.unshift({
         local_id: `schedule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -457,16 +469,19 @@
     }
 
     function renderClientSuggestions() {
-      const names = new Set();
-      cachedClients.forEach((item) => names.add(String(item.nome || '').trim()));
-      getPendingClients().forEach((item) => names.add(String(item.payload?.nome || '').trim()));
-      const orderedNames = Array.from(names).filter(Boolean).sort();
+      const orderedNames = auth.listKnownClients();
 
       clientList.innerHTML = '';
+      clientSavedSelect.innerHTML = '<option value="">Selecionar cliente ja cadastrado</option>';
       orderedNames.forEach((name) => {
         const option = document.createElement('option');
         option.value = name;
         clientList.appendChild(option);
+
+        const selectOption = document.createElement('option');
+        selectOption.value = name;
+        selectOption.textContent = name;
+        clientSavedSelect.appendChild(selectOption);
       });
 
       if (!orderedNames.length) {
@@ -544,6 +559,7 @@
     async function loadClients() {
       const payload = await apiFetch('/api/clients');
       cachedClients = payload.data || [];
+      auth.rememberClientList(cachedClients);
       renderClientSuggestions();
     }
 
@@ -579,6 +595,7 @@
           return;
         }
         if (!apiAvailable) {
+          auth.rememberClientName(payload.cliente);
           queueSchedule(payload);
           setFlash(`Agendamento de ${payload.cliente} salvo offline para sincronizar depois.`, 'success');
           resetForm();
@@ -586,9 +603,11 @@
         }
         if (payload.id > 0) {
           await apiFetch('/api/schedules', { method: 'PUT', body: JSON.stringify(payload) });
+          auth.rememberClientName(payload.cliente);
           setFlash(`Agendamento #${payload.id} atualizado com sucesso.`, 'success');
         } else {
           const result = await apiFetch('/api/schedules', { method: 'POST', body: JSON.stringify(payload) });
+          auth.rememberClientName(payload.cliente);
           setFlash(`Agendamento #${result.data.id} criado com sucesso.`, 'success');
         }
         await loadSchedules();
@@ -602,6 +621,7 @@
           }
           apiAvailable = false;
           setApiStatus(false, 'API desconectada');
+          auth.rememberClientName(payload.cliente);
           queueSchedule(payload);
           setFlash(`Agendamento de ${payload.cliente} salvo offline para sincronizar depois.`, 'success');
           resetForm();
@@ -660,6 +680,11 @@
       }
     });
     document.getElementById('sync-pending').addEventListener('click', syncPendingSchedules);
+    clientSavedSelect.addEventListener('change', (event) => {
+      if (!event.target.value) return;
+      clientInput.value = event.target.value;
+      setFlash(`Cliente ${clientInput.value} selecionado para o agendamento.`, 'success');
+    });
     document.getElementById('horario').addEventListener('change', (event) => {
       document.getElementById('periodo').value = inferPeriodo(event.target.value);
     });

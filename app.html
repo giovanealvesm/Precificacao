@@ -258,6 +258,9 @@
       font-size: 0.88rem;
       line-height: 1.5;
     }
+    .saved-client-select {
+      margin-top: 10px;
+    }
 
     @media (max-width: 900px) {
       .intro, .layout, .form-grid, .metric-grid { grid-template-columns: 1fr; }
@@ -312,6 +315,14 @@
       <section class="panel">
         <h2>Novo orcamento</h2>
         <div class="form-grid">
+          <div class="field full">
+            <label for="cliente-saved">Cliente salvo</label>
+            <select id="cliente-saved" class="saved-client-select">
+              <option value="">Selecionar cliente ja cadastrado</option>
+            </select>
+            <div class="small-note">Use clientes cadastrados, offline ou sincronizados, sem precisar digitar tudo de novo.</div>
+          </div>
+
           <div class="field full">
             <label for="cliente">Nome do cliente</label>
             <input id="cliente" type="text" placeholder="Ex: Joao Silva" />
@@ -475,6 +486,8 @@
     const retratilInput = document.getElementById('retratil');
     const apiStatus = document.getElementById('api-status');
     const apiInput = document.getElementById('api-url');
+    const clientSavedSelect = document.getElementById('cliente-saved');
+    const clientInput = document.getElementById('cliente');
     const flash = document.getElementById('flash');
     const pixTotal = document.getElementById('pix-total');
     const cardTotal = document.getElementById('card-total');
@@ -625,6 +638,7 @@
     }
 
     function queueCurrentQuote(payload, quote) {
+      auth.rememberClientName(payload && payload.cliente);
       const queue = getPendingQueue();
       queue.unshift({
         local_id: `local-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -679,6 +693,17 @@
       `).join('');
     }
 
+    function renderKnownClients() {
+      const names = auth.listKnownClients();
+      clientSavedSelect.innerHTML = '<option value="">Selecionar cliente ja cadastrado</option>';
+      names.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        clientSavedSelect.appendChild(option);
+      });
+    }
+
     async function apiFetch(path, options = {}) {
       auth.saveApiInput(apiInput);
       return auth.apiFetch(path, options);
@@ -695,7 +720,7 @@
       }
 
       return {
-        cliente: document.getElementById('cliente').value.trim(),
+        cliente: clientInput.value.trim(),
         servico,
         modelo,
         largura: Number(document.getElementById('largura').value || '0'),
@@ -763,6 +788,7 @@
         return;
       }
       const payload = await apiFetch('/api/quotes/recent?limit=8');
+      auth.rememberClientList(payload.data || []);
       renderHistory(payload.data || []);
     }
 
@@ -834,6 +860,7 @@
 
         if (apiAvailable) {
           const payload = await apiFetch('/api/quote/save', { method: 'POST', body: JSON.stringify(currentPayload) });
+          auth.rememberClientName(currentPayload.cliente);
           lastQuote = payload.data;
           pixTotal.textContent = currency(lastQuote.total_pix);
           cardTotal.textContent = currency(lastQuote.total_cartao);
@@ -891,6 +918,11 @@
     document.getElementById('calcular').addEventListener('click', calculateQuote);
     document.getElementById('salvar').addEventListener('click', saveQuote);
     document.getElementById('sync-pending').addEventListener('click', syncPendingQuotes);
+    clientSavedSelect.addEventListener('change', (event) => {
+      if (!event.target.value) return;
+      clientInput.value = event.target.value;
+      setFlash(`Cliente ${clientInput.value} aplicado ao orcamento.`, 'success');
+    });
     document.getElementById('refresh-history').addEventListener('click', async () => {
       try {
         await loadRecentQuotes();
@@ -901,7 +933,11 @@
     });
     serviceSelect.addEventListener('change', updateModelOptions);
     modelSelect.addEventListener('change', updateSpecialFields);
+    window.addEventListener('storage', renderKnownClients);
+    window.addEventListener('focus', renderKnownClients);
+    window.addEventListener('pageshow', renderKnownClients);
     renderPendingQueue();
+    renderKnownClients();
     updateSyncStatus();
     loadMetadata().catch(() => {
       metadata = buildLocalMetadata();

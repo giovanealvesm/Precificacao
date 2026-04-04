@@ -315,6 +315,7 @@
     }
 
     function queueClient(payload) {
+      auth.rememberClientName(payload && payload.nome);
       const queue = getPendingClients();
       queue.unshift({
         local_id: `client-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -413,6 +414,7 @@
     async function loadClients() {
       const payload = await apiFetch('/api/clients');
       cachedClients = payload.data || [];
+      auth.rememberClientList(cachedClients);
       renderClients(cachedClients);
     }
 
@@ -437,6 +439,7 @@
       try {
         const payload = currentClientPayload();
         if (!apiAvailable) {
+          auth.rememberClientName(payload.nome);
           queueClient(payload);
           setFlash(`Cliente ${payload.nome} salvo offline para sincronizar depois.`, 'success');
           resetForm();
@@ -444,6 +447,7 @@
         }
 
         await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
+  auth.rememberClientName(payload.nome);
         await loadClients();
         renderPendingClients();
         setFlash(`Cliente ${payload.nome} salvo com sucesso.`, 'success');
@@ -453,6 +457,7 @@
           const payload = currentClientPayload();
           apiAvailable = false;
           setApiStatus(false, 'API desconectada');
+          auth.rememberClientName(payload.nome);
           queueClient(payload);
           setFlash(`Cliente ${payload.nome} salvo offline para sincronizar depois.`, 'success');
           resetForm();

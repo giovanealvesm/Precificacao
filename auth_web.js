@@ -1,6 +1,7 @@
 (function () {
   const API_URL_KEY = 'homewash.apiUrl';
   const USER_KEY = 'homewash.authUser';
+  const KNOWN_CLIENTS_KEY = 'homewash.knownClients';
   const DEFAULT_USER = {
     login: 'operacao-local',
     nome: 'Operacao Local',
@@ -59,6 +60,47 @@
 
   function clearSession() {
     localStorage.setItem(USER_KEY, JSON.stringify(DEFAULT_USER));
+  }
+
+  function readArray(key) {
+    try {
+      const raw = localStorage.getItem(key) || '[]';
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeArray(key, items) {
+    localStorage.setItem(key, JSON.stringify(Array.isArray(items) ? items : []));
+  }
+
+  function normalizeClientName(name) {
+    return String(name || '').trim();
+  }
+
+  function rememberClientName(name) {
+    const normalized = normalizeClientName(name);
+    if (!normalized) return;
+    const current = new Set(readArray(KNOWN_CLIENTS_KEY).map((item) => normalizeClientName(item)).filter(Boolean));
+    current.add(normalized);
+    writeArray(KNOWN_CLIENTS_KEY, Array.from(current).sort((left, right) => left.localeCompare(right, 'pt-BR')));
+  }
+
+  function rememberClientList(items) {
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      rememberClientName(item.nome || item.cliente || item.payload?.nome || item.payload?.cliente || '');
+    });
+  }
+
+  function listKnownClients() {
+    const names = new Set(readArray(KNOWN_CLIENTS_KEY).map((item) => normalizeClientName(item)).filter(Boolean));
+    readArray('homewash.pendingClients').forEach((item) => names.add(normalizeClientName(item && item.payload && item.payload.nome)));
+    readArray('homewash.pendingSchedules').forEach((item) => names.add(normalizeClientName(item && item.payload && item.payload.cliente)));
+    readArray('homewash.pendingQuotes').forEach((item) => names.add(normalizeClientName(item && item.payload && item.payload.cliente)));
+    return Array.from(names).filter(Boolean).sort((left, right) => left.localeCompare(right, 'pt-BR'));
   }
 
   async function apiFetch(path, options = {}) {
@@ -125,8 +167,11 @@
     getStoredUser,
     getToken,
     login,
+    listKnownClients,
     logout,
     normalizeBaseUrl,
+    rememberClientList,
+    rememberClientName,
     requireAuth,
     saveApiInput,
     setApiBase,
