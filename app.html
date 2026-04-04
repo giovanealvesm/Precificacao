@@ -767,6 +767,15 @@
     }
 
     async function testApi() {
+      if (!currentApiBase()) {
+        apiAvailable = false;
+        setApiStatus(false, 'API nao configurada');
+        renderHistory([]);
+        updateSyncStatus();
+        setFlash('Sem URL da API configurada. O app seguira em modo offline para orcamentos.', 'success');
+        return;
+      }
+
       try {
         await apiFetch('/health');
         apiAvailable = true;
@@ -896,16 +905,25 @@
       metadata = buildLocalMetadata();
       updateModelOptions();
     });
-    auth.requireAuth().then(() => {
-      authenticatedSession = true;
-      return testApi();
-    }).catch((error) => {
+
+    if (!currentApiBase()) {
       authenticatedSession = false;
       testApi();
-      if (error && error.code !== 401) {
-        setFlash(error.message, 'error');
-      }
-    });
+    } else if (auth.getToken()) {
+      auth.requireAuth().then(() => {
+        authenticatedSession = true;
+        return testApi();
+      }).catch((error) => {
+        authenticatedSession = false;
+        testApi();
+        if (error && error.code !== 401) {
+          setFlash(error.message, 'error');
+        }
+      });
+    } else {
+      authenticatedSession = false;
+      testApi();
+    }
   </script>
 </body>
 </html>
