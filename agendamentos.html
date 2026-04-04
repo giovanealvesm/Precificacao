@@ -569,12 +569,28 @@
       renderSchedules(cachedSchedules);
     }
 
+    function isAuthRelatedError(error) {
+      const message = String(error && error.message || '');
+      return /login|sessao|sessão|autentic/i.test(message);
+    }
+
     async function testApi() {
       try {
         await apiFetch('/health');
         apiAvailable = true;
         setApiStatus(true, 'API conectada');
-        await Promise.all([loadClients(), loadSchedules()]);
+        try {
+          await Promise.all([loadClients(), loadSchedules()]);
+        } catch (error) {
+          if (isAuthRelatedError(error)) {
+            renderSchedules([]);
+            renderClientSuggestions();
+            renderPendingSchedules();
+            setFlash('API conectada. Faca login novamente para carregar os agendamentos.', 'error');
+            return;
+          }
+          throw error;
+        }
         renderPendingSchedules();
         setFlash('API pronta para o modulo de agendamentos.', 'success');
       } catch (error) {

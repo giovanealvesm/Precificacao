@@ -418,12 +418,27 @@
       renderClients(cachedClients);
     }
 
+    function isAuthRelatedError(error) {
+      const message = String(error && error.message || '');
+      return /login|sessao|sessão|autentic/i.test(message);
+    }
+
     async function testApi() {
       try {
         await apiFetch('/health');
         apiAvailable = true;
         setApiStatus(true, 'API conectada');
-        await loadClients();
+        try {
+          await loadClients();
+        } catch (error) {
+          if (isAuthRelatedError(error)) {
+            renderClients([]);
+            renderPendingClients();
+            setFlash('API conectada. Faca login novamente para carregar os clientes.', 'error');
+            return;
+          }
+          throw error;
+        }
         renderPendingClients();
         setFlash('API pronta para o modulo de clientes.', 'success');
       } catch (error) {

@@ -200,6 +200,24 @@
     .flash.error { color: var(--danger); }
     .flash.success { color: #87f0b7; }
 
+    .edit-state {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 175, 84, 0.28);
+      background: rgba(255, 175, 84, 0.08);
+    }
+
+    .edit-state strong,
+    .edit-state span {
+      display: block;
+    }
+
+    .edit-state strong {
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+    }
+
     .history-list {
       display: grid;
       gap: 12px;
@@ -228,6 +246,75 @@
       color: var(--muted);
       font-size: 0.88rem;
       line-height: 1.5;
+    }
+
+    .history-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .history-actions button {
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+
+    .history-note {
+      color: #ffd59a;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+
+    .quote-items-box {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .quote-items-box h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+
+    .quote-item-card {
+      border-radius: 18px;
+      padding: 15px 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.025);
+    }
+
+    .quote-item-card.active {
+      border-color: rgba(255, 175, 84, 0.38);
+      background: rgba(255, 175, 84, 0.08);
+    }
+
+    .quote-item-card strong,
+    .quote-item-card span {
+      display: block;
+    }
+
+    .quote-item-card strong {
+      margin-bottom: 6px;
+    }
+
+    .quote-item-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .quote-item-actions button {
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+
+    .quote-item-empty {
+      color: var(--muted);
+      font-size: 0.92rem;
+      padding: 10px 0 2px;
     }
 
     .history-empty {
@@ -313,7 +400,11 @@
 
     <main class="layout">
       <section class="panel">
-        <h2>Novo orcamento</h2>
+        <h2 id="quote-form-title">Novo orcamento</h2>
+        <div id="edit-state" class="edit-state" hidden>
+          <strong id="edit-state-title">Modo edicao</strong>
+          <span id="edit-state-meta" class="small-note"></span>
+        </div>
         <div class="form-grid">
           <div class="field full">
             <label for="cliente-saved">Cliente salvo</label>
@@ -352,6 +443,11 @@
             </select>
           </div>
 
+          <div class="field">
+            <label for="quantidade">Quantidade</label>
+            <input id="quantidade" type="number" min="1" step="1" value="1" />
+          </div>
+
           <div class="field full" id="retratil-field">
             <label>Caracteristicas</label>
             <div class="toggle">
@@ -377,9 +473,21 @@
           </div>
         </div>
 
+        <div class="quote-items-box">
+          <h3>Itens do orcamento</h3>
+          <p class="small-note">Adicione quantos itens precisar. O total salvo e sincronizado passa a considerar todos os itens listados abaixo.</p>
+          <div id="quote-items-list" class="history-list">
+            <div class="quote-item-empty">Nenhum item adicionado ainda. Voce pode salvar direto e o item atual sera usado como um orcamento simples.</div>
+          </div>
+        </div>
+
         <div class="actions">
-          <button id="calcular" type="button">Calcular orcamento</button>
-          <button id="salvar" type="button" class="secondary">Salvar ou enfileirar</button>
+          <button id="calcular" type="button">Calcular item</button>
+          <button id="add-item" type="button" class="secondary">Adicionar item</button>
+          <button id="apply-item" type="button" class="secondary" hidden>Aplicar alteracao no item</button>
+          <button id="clear-item" type="button" class="secondary">Limpar item</button>
+          <button id="salvar" type="button" class="secondary">Salvar orcamento</button>
+          <button id="cancel-edit" type="button" class="secondary" hidden>Cancelar edicao</button>
         </div>
         <div id="flash" class="flash"></div>
       </section>
@@ -481,6 +589,10 @@
     const CARD_MULTIPLIER = 1.08;
     const serviceSelect = document.getElementById('servico');
     const modelSelect = document.getElementById('modelo');
+    const quoteFormTitle = document.getElementById('quote-form-title');
+    const editState = document.getElementById('edit-state');
+    const editStateTitle = document.getElementById('edit-state-title');
+    const editStateMeta = document.getElementById('edit-state-meta');
     const larguraField = document.getElementById('largura-field');
     const retratilField = document.getElementById('retratil-field');
     const retratilInput = document.getElementById('retratil');
@@ -488,12 +600,19 @@
     const apiInput = document.getElementById('api-url');
     const clientSavedSelect = document.getElementById('cliente-saved');
     const clientInput = document.getElementById('cliente');
+    const quantityInput = document.getElementById('quantidade');
     const flash = document.getElementById('flash');
     const pixTotal = document.getElementById('pix-total');
     const cardTotal = document.getElementById('card-total');
     const historyList = document.getElementById('history-list');
     const pendingList = document.getElementById('pending-list');
     const syncStatus = document.getElementById('sync-status');
+    const quoteItemsList = document.getElementById('quote-items-list');
+    const addItemButton = document.getElementById('add-item');
+    const applyItemButton = document.getElementById('apply-item');
+    const clearItemButton = document.getElementById('clear-item');
+    const saveButton = document.getElementById('salvar');
+    const cancelEditButton = document.getElementById('cancel-edit');
 
     const balancoField = document.getElementById('balanco-field');
     const encostoField = document.getElementById('encosto-field');
@@ -503,6 +622,10 @@
     let lastQuote = null;
     let apiAvailable = false;
     let authenticatedSession = false;
+    let editingQuoteId = 0;
+    let editingItemIndex = -1;
+    let recentQuotes = [];
+    let quoteItems = [];
 
     function getPendingQueue() {
       try {
@@ -602,6 +725,170 @@
       };
     }
 
+    function buildItemPayload() {
+      const servico = serviceSelect.value;
+      const modelo = modelSelect.value;
+      const extras = {};
+      if (servico === 'poltrona' && modelo === 'amamentacao') {
+        extras.balanco_tipo = Number(document.getElementById('balanco-tipo').value || '1');
+        extras.encosto_alto = document.getElementById('encosto-alto').checked;
+        extras.tem_braco = document.getElementById('tem-braco').checked;
+      }
+
+      return {
+        servico,
+        modelo,
+        largura: Number(document.getElementById('largura').value || '0'),
+        retratil: retratilInput.checked,
+        sujidade: Number(document.getElementById('sujidade').value || '1'),
+        quantidade: Math.max(1, Number(quantityInput.value || '1')),
+        extras,
+      };
+    }
+
+    function calculateLocalQuoteItem(item) {
+      const payload = calculateLocalQuote(item);
+      const quantidade = Math.max(1, Number(item.quantidade || 1));
+      return {
+        ...payload,
+        quantidade,
+        unit_pix: payload.total_pix,
+        unit_cartao: payload.total_cartao,
+        total_pix: Number((payload.total_pix * quantidade).toFixed(2)),
+        total_cartao: Number((payload.total_cartao * quantidade).toFixed(2)),
+      };
+    }
+
+    function summarizeLocalQuoteItems(items, cliente = '') {
+      const normalizedItems = (items || []).map((item) => calculateLocalQuoteItem(item));
+      const servicos = [];
+      const larguras = [];
+      const tipos = [];
+      const sujidades = [];
+      let totalPix = 0;
+      let totalCartao = 0;
+
+      normalizedItems.forEach((item) => {
+        totalPix += Number(item.total_pix || 0);
+        totalCartao += Number(item.total_cartao || 0);
+        let descricao = `${item.quantidade}x ${item.servico_label} (${item.modelo_label || 'Padrao'})`;
+        if (item.servico === 'poltrona' && item.modelo === 'amamentacao') {
+          const extra = item.extras || {};
+          const balancoTipo = Number(extra.balanco_tipo || 1);
+          const encostoDesc = extra.encosto_alto ? 'encosto alto' : 'encosto padrao';
+          const bracoDesc = extra.tem_braco ? 'com braco' : 'sem braco';
+          descricao += ` [Balanco ${balancoTipo}, ${encostoDesc}, ${bracoDesc}]`;
+        }
+        servicos.push(descricao);
+        larguras.push(item.largura > 0
+          ? `${item.servico_label} ${item.largura}cm x${item.quantidade}`
+          : `${item.servico_label} ${item.modelo_label || 'Padrao'} x${item.quantidade}`);
+        tipos.push(`${item.servico_label}: ${item.retratil ? 'Retratil' : 'Fixo'}`);
+        sujidades.push(`${item.servico_label}: ${String(item.sujidade_label || '1').split(' - ')[0]}`);
+      });
+
+      return {
+        cliente,
+        items: normalizedItems,
+        item_count: normalizedItems.length,
+        servico: servicos.join(' | '),
+        largura: larguras.join(' | '),
+        tipo: tipos.join(' | '),
+        sujidade: sujidades.join(' | '),
+        total_pix: Number(totalPix.toFixed(2)),
+        total_cartao: Number(totalCartao.toFixed(2)),
+      };
+    }
+
+    function getQuoteItemsForSubmit() {
+      if (!quoteItems.length) {
+        return [buildItemPayload()];
+      }
+      if (editingItemIndex >= 0 && editingItemIndex < quoteItems.length) {
+        const items = quoteItems.map((item) => ({ ...item, extras: { ...(item.extras || {}) } }));
+        items[editingItemIndex] = buildItemPayload();
+        return items;
+      }
+      return quoteItems.map((item) => ({ ...item, extras: { ...(item.extras || {}) } }));
+    }
+
+    function updateCurrentQuoteTotals(includeDraft = false) {
+      const items = quoteItems.length ? getQuoteItemsForSubmit() : (includeDraft ? [buildItemPayload()] : []);
+      if (!items.length) {
+        lastQuote = null;
+        updateTotals(null);
+        return null;
+      }
+      lastQuote = summarizeLocalQuoteItems(items, clientInput.value.trim());
+      updateTotals(lastQuote);
+      return lastQuote;
+    }
+
+    function updateItemEditorState() {
+      applyItemButton.hidden = editingItemIndex < 0;
+      addItemButton.textContent = editingItemIndex >= 0 ? 'Adicionar novo item' : 'Adicionar item';
+    }
+
+    function clearItemEditor(resetSelection = true) {
+      if (serviceSelect.options.length) {
+        serviceSelect.selectedIndex = 0;
+      }
+      updateModelOptions();
+      document.getElementById('largura').value = '200';
+      document.getElementById('sujidade').value = '1';
+      quantityInput.value = '1';
+      retratilInput.checked = false;
+      document.getElementById('balanco-tipo').value = '1';
+      document.getElementById('encosto-alto').checked = false;
+      document.getElementById('tem-braco').checked = true;
+      updateSpecialFields();
+      if (resetSelection) {
+        editingItemIndex = -1;
+      }
+      updateItemEditorState();
+    }
+
+    function applyItemToEditor(item, index = -1) {
+      if (!item) return;
+      editingItemIndex = index;
+      serviceSelect.value = item.servico || 'sofa';
+      updateModelOptions();
+      modelSelect.value = item.modelo || '';
+      document.getElementById('largura').value = Number(item.largura || 0);
+      document.getElementById('sujidade').value = String(item.sujidade || 1);
+      quantityInput.value = String(Math.max(1, Number(item.quantidade || 1)));
+      retratilInput.checked = Boolean(item.retratil);
+      document.getElementById('balanco-tipo').value = String((item.extras && item.extras.balanco_tipo) || 1);
+      document.getElementById('encosto-alto').checked = Boolean(item.extras && item.extras.encosto_alto);
+      document.getElementById('tem-braco').checked = item.extras && Object.prototype.hasOwnProperty.call(item.extras, 'tem_braco')
+        ? Boolean(item.extras.tem_braco)
+        : true;
+      updateSpecialFields();
+      updateItemEditorState();
+    }
+
+    function renderQuoteItems() {
+      if (!quoteItems.length) {
+        quoteItemsList.innerHTML = '<div class="quote-item-empty">Nenhum item adicionado ainda. Voce pode salvar direto e o item atual sera usado como um orcamento simples.</div>';
+        return;
+      }
+
+      quoteItemsList.innerHTML = quoteItems.map((item, index) => {
+        const calculated = calculateLocalQuoteItem(item);
+        return `
+          <article class="quote-item-card ${editingItemIndex === index ? 'active' : ''}">
+            <strong>Item ${index + 1} | ${calculated.quantidade}x ${escapeHtml(calculated.servico_label)} (${escapeHtml(calculated.modelo_label || 'Padrao')})</strong>
+            <span class="history-meta">Largura: ${calculated.largura || '-'} | Sujidade: ${escapeHtml(calculated.sujidade_label || '-')} | ${calculated.retratil ? 'Retratil' : 'Fixo'}</span>
+            <span class="history-money">PIX: ${currency(calculated.total_pix)} | Cartao: ${currency(calculated.total_cartao)}</span>
+            <div class="quote-item-actions">
+              <button type="button" class="secondary" data-action="edit-item" data-index="${index}">Editar item</button>
+              <button type="button" class="secondary" data-action="remove-item" data-index="${index}">Remover</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
     function renderPendingQueue() {
       const queue = getPendingQueue();
       if (!queue.length) {
@@ -612,7 +899,8 @@
       pendingList.innerHTML = queue.map((item) => `
         <article class="sync-card">
           <strong>${item.payload?.cliente || 'Cliente sem nome'}</strong>
-          <span class="sync-meta">${new Date(item.created_at).toLocaleString('pt-BR')} | ${item.quote?.servico_label || '-'} | ${item.quote?.modelo_label || '-'}</span>
+          <span class="sync-meta">${new Date(item.created_at).toLocaleString('pt-BR')} | ${item.quote?.item_count || 1} item(ns)</span>
+          <span class="sync-meta">${item.quote?.servico || '-'}</span>
           <span class="sync-meta">PIX: ${currency(item.quote?.total_pix)} | Cartao: ${currency(item.quote?.total_cartao)}</span>
         </article>
       `).join('');
@@ -673,11 +961,79 @@
       apiStatus.classList.toggle('offline', !ok);
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function updateTotals(quote) {
+      pixTotal.textContent = currency(quote && quote.total_pix);
+      cardTotal.textContent = currency(quote && quote.total_cartao);
+    }
+
+    function resetQuoteForm() {
+      clientSavedSelect.value = '';
+      clientInput.value = '';
+      quoteItems = [];
+      renderQuoteItems();
+      clearItemEditor(true);
+      lastQuote = null;
+      updateTotals(null);
+    }
+
+    function clearEditingState(resetForm = false) {
+      editingQuoteId = 0;
+      quoteFormTitle.textContent = 'Novo orcamento';
+      editState.hidden = true;
+      editStateTitle.textContent = 'Modo edicao';
+      editStateMeta.textContent = '';
+      saveButton.textContent = 'Salvar orcamento';
+      cancelEditButton.hidden = true;
+      if (resetForm) {
+        resetQuoteForm();
+      }
+    }
+
+    function applyQuoteToForm(payload) {
+      if (!payload) return;
+      clientInput.value = payload.cliente || '';
+      clientSavedSelect.value = payload.cliente || '';
+      quoteItems = Array.isArray(payload.items)
+        ? payload.items.map((item) => ({ ...item, extras: { ...(item.extras || {}) } }))
+        : [];
+      editingItemIndex = -1;
+      renderQuoteItems();
+      if (quoteItems.length) {
+        applyItemToEditor(quoteItems[0], -1);
+      } else {
+        clearItemEditor(true);
+      }
+      updateCurrentQuoteTotals();
+    }
+
+    function startEditingQuote(item) {
+      if (!item || !item.edit_payload) return;
+      editingQuoteId = Number(item.id || 0);
+      quoteFormTitle.textContent = `Editar orcamento #${editingQuoteId}`;
+      editState.hidden = false;
+      editStateTitle.textContent = `Editando ${item.cliente || 'cliente sem nome'}`;
+      editStateMeta.textContent = `${item.data || '-'} | ${item.servico || '-'} | ${item.tipo || '-'}`;
+      saveButton.textContent = 'Atualizar orcamento';
+      cancelEditButton.hidden = false;
+      applyQuoteToForm(item.edit_payload);
+      quoteFormTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     function currentApiBase() {
       return normalizeBaseUrl(apiInput.value);
     }
 
     function renderHistory(items) {
+      recentQuotes = Array.isArray(items) ? items : [];
       if (!Array.isArray(items) || !items.length) {
         historyList.innerHTML = '<div class="history-empty">Nenhum orcamento salvo ainda.</div>';
         return;
@@ -685,10 +1041,19 @@
 
       historyList.innerHTML = items.map((item) => `
         <article class="history-item">
-          <strong>#${item.id} ${item.cliente || 'Cliente sem nome'}</strong>
-          <span class="history-meta">${item.data || '-'} | ${item.servico || '-'} | ${item.tipo || '-'}</span>
-          <span class="history-meta">Largura: ${item.largura || '-'} | Sujidade: ${item.sujidade || '-'}</span>
+          <strong>#${item.id} ${escapeHtml(item.cliente || 'Cliente sem nome')}</strong>
+          <span class="history-meta">${escapeHtml(item.data || '-')} | ${escapeHtml(item.servico || '-')} | ${escapeHtml(item.tipo || '-')}</span>
+          <span class="history-meta">Largura: ${escapeHtml(item.largura || '-')} | Sujidade: ${escapeHtml(item.sujidade || '-')}</span>
+          <span class="history-meta">Itens: ${Number(item.item_count || 0) || 1}</span>
           <span class="history-money">PIX: ${currency(item.total_pix)} | Cartao: ${currency(item.total_cartao)}</span>
+          <div class="history-actions">
+            ${item.web_editable
+              ? `<button type="button" class="secondary" data-action="edit-quote" data-id="${item.id}">Editar</button>`
+              : ''}
+          </div>
+          ${item.web_editable
+            ? ''
+            : `<div class="history-note">${escapeHtml(item.edit_reason || 'Este orcamento ainda nao pode ser editado na web.')}</div>`}
         </article>
       `).join('');
     }
@@ -710,23 +1075,9 @@
     }
 
     function buildPayload() {
-      const servico = serviceSelect.value;
-      const modelo = modelSelect.value;
-      const extras = {};
-      if (servico === 'poltrona' && modelo === 'amamentacao') {
-        extras.balanco_tipo = Number(document.getElementById('balanco-tipo').value || '1');
-        extras.encosto_alto = document.getElementById('encosto-alto').checked;
-        extras.tem_braco = document.getElementById('tem-braco').checked;
-      }
-
       return {
         cliente: clientInput.value.trim(),
-        servico,
-        modelo,
-        largura: Number(document.getElementById('largura').value || '0'),
-        retratil: retratilInput.checked,
-        sujidade: Number(document.getElementById('sujidade').value || '1'),
-        extras,
+        items: getQuoteItemsForSubmit(),
       };
     }
 
@@ -792,6 +1143,11 @@
       renderHistory(payload.data || []);
     }
 
+    function isAuthRelatedError(error) {
+      const message = String(error && error.message || '');
+      return /login|sessao|sessão|autentic/i.test(message);
+    }
+
     async function testApi() {
       if (!currentApiBase()) {
         apiAvailable = false;
@@ -805,18 +1161,34 @@
       try {
         await apiFetch('/health');
         apiAvailable = true;
-        authenticatedSession = true;
         setApiStatus(true, 'API conectada');
-        if (!metadata) {
-          await loadMetadata();
+        try {
+          if (!metadata) {
+            await loadMetadata();
+          }
+          await loadRecentQuotes();
+          authenticatedSession = true;
+        } catch (error) {
+          if (isAuthRelatedError(error)) {
+            authenticatedSession = false;
+            if (!metadata) {
+              metadata = buildLocalMetadata();
+              updateModelOptions();
+            }
+            renderHistory([]);
+            updateSyncStatus();
+            setFlash('API conectada. Faca login novamente para sincronizar os orcamentos.', 'error');
+            return;
+          }
+          throw error;
         }
-        await loadRecentQuotes();
         updateSyncStatus();
         setFlash('API pronta para uso.', 'success');
       } catch (error) {
         apiAvailable = false;
         authenticatedSession = false;
         setApiStatus(false, 'API desconectada');
+        clearEditingState(false);
         if (!metadata) {
           metadata = buildLocalMetadata();
           updateModelOptions();
@@ -829,22 +1201,13 @@
 
     async function calculateQuote() {
       try {
-        const currentPayload = buildPayload();
-        let quote = null;
-        if (apiAvailable) {
-          try {
-            const payload = await apiFetch('/api/quote', { method: 'POST', body: JSON.stringify(currentPayload) });
-            quote = payload.data;
-          } catch (error) {
-            quote = calculateLocalQuote(currentPayload);
-          }
-        } else {
-          quote = calculateLocalQuote(currentPayload);
-        }
-        lastQuote = quote;
-        pixTotal.textContent = currency(lastQuote.total_pix);
-        cardTotal.textContent = currency(lastQuote.total_cartao);
-        setFlash(apiAvailable ? 'Orcamento calculado com sucesso.' : 'Orcamento calculado em modo offline.', 'success');
+        const summary = updateCurrentQuoteTotals(true);
+        setFlash(
+          quoteItems.length
+            ? `Total recalculado com ${summary.item_count} item(ns) no orcamento.`
+            : 'Item atual calculado com sucesso.',
+          'success'
+        );
       } catch (error) {
         setFlash(error.message, 'error');
       }
@@ -853,17 +1216,33 @@
     async function saveQuote() {
       try {
         const currentPayload = buildPayload();
-        const currentQuote = lastQuote || calculateLocalQuote(currentPayload);
+        const currentQuote = lastQuote || summarizeLocalQuoteItems(currentPayload.items, currentPayload.cliente);
         lastQuote = currentQuote;
-        pixTotal.textContent = currency(lastQuote.total_pix);
-        cardTotal.textContent = currency(lastQuote.total_cartao);
+        updateTotals(lastQuote);
+
+        if (editingQuoteId) {
+          if (!apiAvailable) {
+            throw new Error('A edicao de orcamento precisa de API online.');
+          }
+
+          const payload = await apiFetch('/api/quotes', {
+            method: 'PUT',
+            body: JSON.stringify({ id: editingQuoteId, ...currentPayload }),
+          });
+          auth.rememberClientName(currentPayload.cliente);
+          lastQuote = payload.data;
+          updateTotals(lastQuote);
+          await loadRecentQuotes();
+          clearEditingState(true);
+          setFlash(`Orcamento #${payload.id} atualizado com sucesso.`, 'success');
+          return;
+        }
 
         if (apiAvailable) {
           const payload = await apiFetch('/api/quote/save', { method: 'POST', body: JSON.stringify(currentPayload) });
           auth.rememberClientName(currentPayload.cliente);
           lastQuote = payload.data;
-          pixTotal.textContent = currency(lastQuote.total_pix);
-          cardTotal.textContent = currency(lastQuote.total_cartao);
+          updateTotals(lastQuote);
           await loadRecentQuotes();
           setFlash(`Orcamento salvo no banco com ID ${payload.id}.`, 'success');
           return;
@@ -916,12 +1295,94 @@
     });
     document.getElementById('test-api').addEventListener('click', testApi);
     document.getElementById('calcular').addEventListener('click', calculateQuote);
+    addItemButton.addEventListener('click', () => {
+      const item = buildItemPayload();
+      quoteItems = [...quoteItems, item];
+      editingItemIndex = -1;
+      renderQuoteItems();
+      clearItemEditor(true);
+      updateCurrentQuoteTotals();
+      setFlash(`Item ${quoteItems.length} adicionado ao orcamento.`, 'success');
+    });
+    applyItemButton.addEventListener('click', () => {
+      if (editingItemIndex < 0 || editingItemIndex >= quoteItems.length) {
+        setFlash('Selecione um item ja existente para aplicar a alteracao.', 'error');
+        return;
+      }
+      const item = buildItemPayload();
+      quoteItems = quoteItems.map((currentItem, index) => (index === editingItemIndex ? item : currentItem));
+      const updatedIndex = editingItemIndex;
+      editingItemIndex = -1;
+      renderQuoteItems();
+      clearItemEditor(true);
+      updateCurrentQuoteTotals();
+      setFlash(`Item ${updatedIndex + 1} atualizado no orcamento.`, 'success');
+    });
+    clearItemButton.addEventListener('click', () => {
+      clearItemEditor(true);
+      updateCurrentQuoteTotals();
+      setFlash('Editor do item limpo.', 'success');
+    });
     document.getElementById('salvar').addEventListener('click', saveQuote);
+    cancelEditButton.addEventListener('click', () => {
+      clearEditingState(true);
+      setFlash('Edicao cancelada.', 'success');
+    });
     document.getElementById('sync-pending').addEventListener('click', syncPendingQuotes);
     clientSavedSelect.addEventListener('change', (event) => {
       if (!event.target.value) return;
       clientInput.value = event.target.value;
       setFlash(`Cliente ${clientInput.value} aplicado ao orcamento.`, 'success');
+    });
+    historyList.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action="edit-quote"]');
+      if (!button) return;
+
+      const quoteId = Number(button.dataset.id || 0);
+      const item = recentQuotes.find((entry) => Number(entry.id || 0) === quoteId);
+      if (!item) {
+        setFlash('Orcamento nao encontrado no historico atual.', 'error');
+        return;
+      }
+      if (!item.web_editable || !item.edit_payload) {
+        setFlash(item.edit_reason || 'Este orcamento ainda nao pode ser editado na web.', 'error');
+        return;
+      }
+
+      if (!metadata) {
+        await loadMetadata();
+      }
+      startEditingQuote(item);
+      setFlash(`Orcamento #${quoteId} carregado para edicao.`, 'success');
+    });
+    quoteItemsList.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+
+      const itemIndex = Number(button.dataset.index || -1);
+      if (itemIndex < 0 || itemIndex >= quoteItems.length) {
+        setFlash('Item do orcamento nao encontrado.', 'error');
+        return;
+      }
+
+      if (button.dataset.action === 'edit-item') {
+        applyItemToEditor(quoteItems[itemIndex], itemIndex);
+        renderQuoteItems();
+        setFlash(`Item ${itemIndex + 1} carregado no editor.`, 'success');
+        return;
+      }
+
+      if (button.dataset.action === 'remove-item') {
+        quoteItems = quoteItems.filter((_, index) => index !== itemIndex);
+        if (editingItemIndex === itemIndex) {
+          clearItemEditor(true);
+        } else if (editingItemIndex > itemIndex) {
+          editingItemIndex -= 1;
+        }
+        renderQuoteItems();
+        updateCurrentQuoteTotals();
+        setFlash(`Item ${itemIndex + 1} removido do orcamento.`, 'success');
+      }
     });
     document.getElementById('refresh-history').addEventListener('click', async () => {
       try {
@@ -937,6 +1398,7 @@
     window.addEventListener('focus', renderKnownClients);
     window.addEventListener('pageshow', renderKnownClients);
     renderPendingQueue();
+    renderQuoteItems();
     renderKnownClients();
     updateSyncStatus();
     loadMetadata().catch(() => {
