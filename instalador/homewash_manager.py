@@ -30,6 +30,9 @@ except Exception:
 
 
 ENV_PATH = BASE_DIR / ".env"
+MANAGER_HOST = "127.0.0.1"
+MANAGER_PORT = 8766
+RESTORE_SIGNAL = b"SHOW_HOMEWASH_MANAGER"
 PID_FILES = [
     BASE_DIR / "streamlit_pro.pid",
     BASE_DIR / "cloudflare_tunnel.pid",
@@ -74,8 +77,11 @@ class HomeWashManager(tk.Tk):
         self.tray_icon = None
         self._window_icon_ref = None
         self.is_tray_enabled = pystray is not None and Image is not None and ImageDraw is not None
+        self._instance_server = None
+        self._instance_thread = None
 
         self._apply_window_icon_from_brand_logo()
+        self._start_instance_server()
         self._build_ui()
         self._load_env()
         self._initial_checks()
@@ -1101,8 +1107,49 @@ class HomeWashManager(tk.Tk):
         if self._poll_job:
             self.after_cancel(self._poll_job)
             self._poll_job = None
+        self._stop_instance_server()
         self._stop_tray_icon()
         self.destroy()
+
+    def _start_instance_server(self):
+        try:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((MANAGER_HOST, MANAGER_PORT))
+            server.listen(5)
+            self._instance_server = server
+        except OSError:
+            self._instance_server = None
+            return
+
+        def serve():
+            while self._instance_server:
+              try:
+                  client, _address = self._instance_server.accept()
+              except OSError:
+                  break
+              try:
+                  payload = client.recv(128)
+                  if payload == RESTORE_SIGNAL:
+                      self.after(0, self.restore_from_tray)
+              except OSError:
+                  pass
+              finally:
+                  try:
+                      client.close()
+                  except OSError:
+                      pass
+
+        self._instance_thread = threading.Thread(target=serve, daemon=True)
+        self._instance_thread.start()
+
+    def _stop_instance_server(self):
+        if self._instance_server:
+            try:
+                self._instance_server.close()
+            except OSError:
+                pass
+            self._instance_server = None
 
     def _create_tray_image(self):
         if Image is not None:
@@ -1140,7 +1187,10 @@ class HomeWashManager(tk.Tk):
 
     def restore_from_tray(self):
         self.deiconify()
+        self.state("normal")
         self.lift()
+        self.attributes("-topmost", True)
+        self.after(150, lambda: self.attributes("-topmost", False))
         self.focus_force()
 
     def _tray_safe(self, callback):
@@ -1171,6 +1221,18 @@ class HomeWashManager(tk.Tk):
             self.tray_icon = None
 
 
+def notify_existing_manager():
+    try:
+        client = socket.create_connection((MANAGER_HOST, MANAGER_PORT), timeout=1.5)
+        client.sendall(RESTORE_SIGNAL)
+        client.close()
+        return True
+    except OSError:
+        return False
+
+
 if __name__ == "__main__":
+    if notify_existing_manager():
+        sys.exit(0)
     app = HomeWashManager()
     app.mainloop()
