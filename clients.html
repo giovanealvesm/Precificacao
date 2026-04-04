@@ -146,12 +146,43 @@
     .client-card strong, .client-card span { display: block; }
     .client-card strong { font-size: 1rem; margin-bottom: 6px; }
     .client-meta { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .summary-chip {
+      border-radius: 18px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+    }
+    .summary-chip strong,
+    .summary-chip span {
+      display: block;
+    }
+    .summary-chip strong {
+      font-size: 1.55rem;
+      margin-top: 6px;
+    }
+    .edit-hint {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(18, 183, 194, 0.28);
+      background: rgba(15, 156, 165, 0.12);
+      color: #c2f6f9;
+      font-size: 0.92rem;
+      display: none;
+    }
     .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
     .flash.error { color: var(--danger); }
     .flash.success { color: #87f0b7; }
     .empty { color: var(--muted); padding: 14px 0; }
     @media (max-width: 920px) {
       .layout { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -181,7 +212,7 @@
     <main class="layout">
       <section class="panel">
         <div class="eyebrow">Cadastro</div>
-        <h1>Novo cliente</h1>
+        <h1 id="form-title">Novo cliente</h1>
         <p class="lead">Primeira migracao do modulo de clientes para uma interface web separada do Streamlit.</p>
 
         <div class="field">
@@ -192,6 +223,8 @@
           <button id="save-api-url" type="button" class="secondary">Salvar URL da API</button>
           <button id="test-api" type="button" class="secondary">Testar conexao</button>
         </div>
+
+        <input id="client-original-name" type="hidden" />
 
         <div class="field">
           <label for="nome">Nome</label>
@@ -222,6 +255,8 @@
           <textarea id="notas" placeholder="Observacoes do cliente"></textarea>
         </div>
 
+        <div id="edit-hint" class="edit-hint">Modo edicao ativo. Para evitar duplicidade e conflitos na base atual, o nome do cliente deve permanecer o mesmo nesta tela.</div>
+
         <div class="actions">
           <button id="save-client" type="button">Salvar cliente</button>
           <button id="reset-form" type="button" class="secondary">Limpar formulario</button>
@@ -232,6 +267,11 @@
       <section class="list-card">
         <div class="eyebrow">Base atual</div>
         <h2>Clientes cadastrados</h2>
+        <div class="field" style="margin-top: 10px;">
+          <label for="client-search">Buscar cliente</label>
+          <input id="client-search" type="search" placeholder="Nome, telefone, email ou endereco" />
+        </div>
+        <div id="client-summary" class="summary-grid"></div>
         <div class="actions" style="margin-top: 10px;">
           <button id="refresh-clients" type="button" class="secondary">Atualizar lista</button>
           <button id="sync-pending" type="button" class="secondary">Sincronizar pendentes</button>
@@ -251,6 +291,11 @@
     const apiStatus = document.getElementById('api-status');
     const flash = document.getElementById('flash');
     const clientList = document.getElementById('client-list');
+    const clientSummary = document.getElementById('client-summary');
+    const clientSearchInput = document.getElementById('client-search');
+    const formTitle = document.getElementById('form-title');
+    const editHint = document.getElementById('edit-hint');
+    const saveClientButton = document.getElementById('save-client');
     const pendingList = document.getElementById('pending-list');
     const pendingSummary = document.getElementById('pending-summary');
     const PENDING_CLIENTS_KEY = 'homewash.pendingClients';
@@ -349,16 +394,30 @@
       };
     }
 
+    function isEditingClient() {
+      return Boolean(document.getElementById('client-original-name').value.trim());
+    }
+
+    function syncFormMode() {
+      const editing = isEditingClient();
+      formTitle.textContent = editing ? 'Editar cliente' : 'Novo cliente';
+      saveClientButton.textContent = editing ? 'Atualizar cliente' : 'Salvar cliente';
+      editHint.style.display = editing ? 'block' : 'none';
+    }
+
     function resetForm() {
+      document.getElementById('client-original-name').value = '';
       ['nome', 'telefone', 'email', 'endereco', 'proxima-agenda', 'criado-por', 'notas'].forEach((id) => {
         document.getElementById(id).value = '';
       });
       document.getElementById('criado-por').value = 'Operacao Local';
+      syncFormMode();
     }
 
     function fillClientForm(nome) {
       const client = cachedClients.find((item) => item.nome === nome);
       if (!client) return;
+      document.getElementById('client-original-name').value = client.nome || '';
       document.getElementById('nome').value = client.nome || '';
       document.getElementById('telefone').value = client.telefone || '';
       document.getElementById('email').value = client.email || '';
@@ -366,16 +425,45 @@
       document.getElementById('proxima-agenda').value = client.proxima_agenda || '';
       document.getElementById('criado-por').value = client.criado_por || '';
       document.getElementById('notas').value = client.notas || '';
+      syncFormMode();
       setFlash(`Formulario preenchido com os dados de ${nome}.`, 'success');
     }
 
+    function renderClientSummary(items) {
+      const data = Array.isArray(items) ? items : [];
+      const withPhone = data.filter((item) => String(item.telefone || '').trim()).length;
+      const withEmail = data.filter((item) => String(item.email || '').trim()).length;
+      const withAgenda = data.filter((item) => String(item.proxima_agenda || '').trim()).length;
+      clientSummary.innerHTML = [
+        ['Total', data.length],
+        ['Com telefone', withPhone],
+        ['Com e-mail', withEmail],
+        ['Com proxima agenda', withAgenda],
+      ].map(([label, value]) => `
+        <article class="summary-chip">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </article>
+      `).join('');
+    }
+
     function renderClients(items) {
-      if (!Array.isArray(items) || !items.length) {
+      const data = Array.isArray(items) ? items : [];
+      renderClientSummary(data);
+
+      const search = String(clientSearchInput.value || '').trim().toLowerCase();
+      const visibleItems = data.filter((item) => {
+        if (!search) return true;
+        return [item.nome, item.telefone, item.email, item.endereco, item.notas, item.criado_por]
+          .some((value) => String(value || '').toLowerCase().includes(search));
+      });
+
+      if (!visibleItems.length) {
         clientList.innerHTML = '<div class="empty">Nenhum cliente cadastrado.</div>';
         return;
       }
 
-      clientList.innerHTML = items.map((item) => `
+      clientList.innerHTML = visibleItems.map((item) => `
         <article class="client-card">
           <strong>${item.nome || 'Cliente sem nome'}</strong>
           <span class="client-meta">Telefone: ${item.telefone || '-'}</span>
@@ -453,6 +541,11 @@
     async function saveClient() {
       try {
         const payload = currentClientPayload();
+        const originalName = document.getElementById('client-original-name').value.trim();
+        if (originalName && payload.nome && payload.nome !== originalName) {
+          setFlash('A edicao web ainda nao permite renomear cliente existente. Mantenha o mesmo nome ou limpe o formulario para criar outro cadastro.', 'error');
+          return;
+        }
         if (!apiAvailable) {
           auth.rememberClientName(payload.nome);
           queueClient(payload);
@@ -462,10 +555,10 @@
         }
 
         await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
-  auth.rememberClientName(payload.nome);
+    auth.rememberClientName(payload.nome);
         await loadClients();
         renderPendingClients();
-        setFlash(`Cliente ${payload.nome} salvo com sucesso.`, 'success');
+    setFlash(`Cliente ${payload.nome} ${originalName ? 'atualizado' : 'salvo'} com sucesso.`, 'success');
         resetForm();
       } catch (error) {
         if (shouldQueueOffline(error)) {
@@ -517,6 +610,7 @@
     });
     document.getElementById('test-api').addEventListener('click', testApi);
     document.getElementById('save-client').addEventListener('click', saveClient);
+    clientSearchInput.addEventListener('input', () => renderClients(cachedClients));
     document.getElementById('reset-form').addEventListener('click', () => {
       resetForm();
       setFlash('Formulario limpo.', 'success');
@@ -532,6 +626,7 @@
     });
     document.getElementById('sync-pending').addEventListener('click', syncPendingClients);
     document.getElementById('criado-por').value = 'Operacao Local';
+    syncFormMode();
     renderPendingClients();
     testApi();
   </script>

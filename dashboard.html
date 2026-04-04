@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Home Wash Web App | Painel</title>
-  <meta name="description" content="Painel inicial do frontend estatico da Home Wash." />
+  <meta name="description" content="Painel analitico do frontend estatico da Home Wash." />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <script src="landing_page_config.js"></script>
   <script src="auth_web.js"></script>
@@ -12,12 +12,15 @@
     :root {
       --surface: rgba(9, 21, 24, 0.92);
       --surface-alt: rgba(13, 31, 36, 0.96);
+      --surface-soft: rgba(255, 255, 255, 0.025);
       --border: rgba(86, 173, 180, 0.32);
       --text: #eff8f8;
       --muted: #a4c3c7;
       --primary: #0f9ca5;
       --primary-strong: #12b7c2;
+      --accent: #87f0b7;
       --danger: #ff6a63;
+      --warning: #ffc86a;
       --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
     }
     * { box-sizing: border-box; }
@@ -32,11 +35,11 @@
       min-height: 100vh;
     }
     .shell {
-      width: min(1180px, calc(100% - 32px));
+      width: min(1260px, calc(100% - 32px));
       margin: 0 auto;
       padding: 28px 0 48px;
     }
-    .topbar, .panel, .card {
+    .topbar, .panel, .card, .hero-panel {
       border: 1px solid var(--border);
       background: linear-gradient(180deg, var(--surface-alt) 0%, var(--surface) 100%);
       box-shadow: var(--shadow);
@@ -56,7 +59,7 @@
     .brand strong { display: block; }
     .brand span { display: block; color: var(--muted); font-size: 0.92rem; }
     .nav-links { display: flex; gap: 12px; flex-wrap: wrap; }
-    .nav-links a, .nav-links button {
+    .nav-links a, .nav-links button, .action-link {
       color: var(--text);
       text-decoration: none;
       padding: 10px 14px;
@@ -66,11 +69,23 @@
       font: inherit;
       cursor: pointer;
     }
-    .hero, .grid, .recent-grid { display: grid; gap: 20px; }
-    .hero { grid-template-columns: 1.15fr 0.85fr; margin-bottom: 20px; }
-    .grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 20px; }
-    .recent-grid { grid-template-columns: 1fr 1fr; }
-    .panel, .card { padding: 22px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .hero-panel, .panel, .card {
+      padding: 22px;
+    }
+    .hero-panel h1, .panel h2 {
+      margin: 0 0 10px;
+    }
+    .hero-panel h1 {
+      font-size: clamp(1.8rem, 3vw, 3rem);
+      line-height: 1.08;
+      max-width: 12ch;
+    }
     .eyebrow {
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -79,32 +94,136 @@
       font-weight: 700;
       margin-bottom: 10px;
     }
-    .lead, .small-note { color: var(--muted); line-height: 1.6; }
-    .metric-value { font-size: 2rem; font-weight: 800; }
-    .module-links { display: grid; gap: 12px; margin-top: 18px; }
-    .module-links a {
-      display: block;
-      border-radius: 18px;
-      padding: 16px;
-      text-decoration: none;
-      color: var(--text);
-      border: 1px solid rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.025);
+    .lead, .small-note, .helper {
+      color: var(--muted);
+      line-height: 1.6;
     }
-    .list { display: grid; gap: 12px; }
-    .list-item {
+    .hero-pills {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 20px;
+    }
+    .pill {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--surface-soft);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .pill strong, .pill span { display: block; }
+    .pill strong { font-size: 1.25rem; }
+    .hero-actions, .quick-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .metric-card .small-note {
+      margin: 10px 0 0;
+    }
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .stack {
+      display: grid;
+      gap: 20px;
+    }
+    .bar-list, .list, .mini-grid { display: grid; gap: 12px; }
+    .bar-item, .list-item, .mini-card {
       border-radius: 18px;
       padding: 15px 16px;
       border: 1px solid rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.025);
+      background: var(--surface-soft);
+    }
+    .bar-head, .list-item strong, .mini-card strong {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
     }
     .list-item strong, .list-item span { display: block; }
     .list-item span { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .bar-track {
+      margin: 10px 0 8px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--primary) 0%, var(--primary-strong) 100%);
+    }
+    .bar-fill.success {
+      background: linear-gradient(90deg, #48c98c 0%, #87f0b7 100%);
+    }
+    .bar-fill.warning {
+      background: linear-gradient(90deg, #ffb455 0%, #ffd188 100%);
+    }
+    .mini-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .mini-card strong {
+      font-size: 1.65rem;
+      justify-content: flex-start;
+    }
+    .mini-card span, .meta-line {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .recent-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
     .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
     .flash.error { color: var(--danger); }
-    .flash.success { color: #87f0b7; }
+    .flash.success { color: var(--accent); }
+    .empty-state {
+      color: var(--muted);
+      border: 1px dashed rgba(255,255,255,0.16);
+      border-radius: 18px;
+      padding: 18px;
+      text-align: center;
+    }
+    @media (max-width: 1120px) {
+      .metric-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
     @media (max-width: 980px) {
-      .hero, .grid, .recent-grid { grid-template-columns: 1fr; }
+      .hero, .analytics-grid, .recent-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      .metric-grid, .hero-pills, .mini-grid {
+        grid-template-columns: 1fr;
+      }
+      .shell {
+        width: min(100%, calc(100% - 20px));
+      }
     }
   </style>
 </head>
@@ -123,61 +242,148 @@
         <a href="app.html">Orcamentos</a>
         <a href="clients.html">Clientes</a>
         <a href="agendamentos.html">Agendamentos</a>
+        <button id="logout-button" type="button">Sair</button>
       </div>
     </div>
 
     <section class="hero">
-      <div class="panel">
-        <div class="eyebrow">Painel inicial</div>
-        <h1>Entrada unica para a migracao web</h1>
-        <p class="lead">Este painel consolida o estado dos modulos migrados e vira o ponto natural de entrada quando o frontend estiver publicado de forma estatica.</p>
-        <div class="module-links">
-          <a href="sync.html"><strong>Sincronizacao</strong><span>Veja pendencias locais e sincronize clientes, agenda e orcamentos em um unico lugar.</span></a>
-          <a href="app.html"><strong>Orcamentos</strong><span>Calculo e historico recente com persistencia no SQLite.</span></a>
-          <a href="clients.html"><strong>Clientes</strong><span>Cadastro, listagem e exclusao basica na nova API.</span></a>
-          <a href="agendamentos.html"><strong>Agendamentos</strong><span>CRUD inicial da agenda antes da migracao de Google Calendar e notificacoes.</span></a>
+      <article class="hero-panel">
+        <div class="eyebrow">Painel analitico</div>
+        <h1>Leitura rapida da operacao atual.</h1>
+        <p class="lead">O painel agora traz contagem real de orcamentos, faturamento informado, ticket medio, clientes mais fortes e ritmo da agenda sem depender do sistema legado.</p>
+        <div class="hero-pills">
+          <div class="pill">
+            <span>Faturamento total</span>
+            <strong id="hero-faturamento">R$ 0,00</strong>
+          </div>
+          <div class="pill">
+            <span>Ticket medio</span>
+            <strong id="hero-ticket">R$ 0,00</strong>
+          </div>
         </div>
-      </div>
-      <div class="panel">
+        <div class="hero-actions">
+          <a class="action-link" href="sync.html">Ver sincronizacao</a>
+          <a class="action-link" href="app.html">Abrir orcamentos</a>
+          <a class="action-link" href="agendamentos.html">Abrir agenda</a>
+        </div>
+      </article>
+
+      <article class="panel">
         <div class="eyebrow">Conexao</div>
-        <h2>API atual</h2>
+        <h2>API ativa</h2>
         <p class="small-note" id="api-line">Aguardando configuracao...</p>
-        <div class="actions" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
-          <a href="sync.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Abrir sincronizacao</a>
-          <a href="app.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Abrir orcamentos</a>
-          <a href="login.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Configurar API</a>
+        <div class="mini-grid" style="margin-top:18px;">
+          <div class="mini-card">
+            <span>Pagamentos informados</span>
+            <strong id="metric-pagamentos">0</strong>
+            <span class="meta-line">Orcamentos com forma de pagamento definida.</span>
+          </div>
+          <div class="mini-card">
+            <span>Agenda do mes</span>
+            <strong id="metric-agenda-mes">0</strong>
+            <span class="meta-line">Agendamentos no mes atual.</span>
+          </div>
+          <div class="mini-card">
+            <span>Concluidos no mes</span>
+            <strong id="metric-concluidos-mes">0</strong>
+            <span class="meta-line">Servicos marcados como realizados.</span>
+          </div>
+          <div class="mini-card">
+            <span>Agendamentos atrasados</span>
+            <strong id="metric-atrasados">0</strong>
+            <span class="meta-line">Pendencias anteriores a hoje.</span>
+          </div>
         </div>
-      </div>
+      </article>
     </section>
 
-    <section class="grid">
-      <article class="card">
-        <div class="eyebrow">Clientes</div>
-        <div class="metric-value" id="count-clientes">0</div>
+    <section class="metric-grid">
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Clientes</div>
+          <div class="metric-value" id="count-clientes">0</div>
+        </div>
         <p class="small-note">Clientes cadastrados na base atual.</p>
       </article>
-      <article class="card">
-        <div class="eyebrow">Agenda</div>
-        <div class="metric-value" id="count-agendamentos">0</div>
-        <p class="small-note">Agendamentos retornados pela API nova.</p>
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Agenda</div>
+          <div class="metric-value" id="count-agendamentos">0</div>
+        </div>
+        <p class="small-note">Todos os agendamentos devolvidos pela API.</p>
       </article>
-      <article class="card">
-        <div class="eyebrow">Historico</div>
-        <div class="metric-value" id="count-orcamentos">0</div>
-        <p class="small-note">Orcamentos recentes visiveis no painel.</p>
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Orcamentos</div>
+          <div class="metric-value" id="count-orcamentos">0</div>
+        </div>
+        <p class="small-note">Volume total de orcamentos no historico.</p>
       </article>
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Mes atual</div>
+          <div class="metric-value" id="count-orcamentos-mes">0</div>
+        </div>
+        <p class="small-note">Orcamentos registrados no mes corrente.</p>
+      </article>
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Pendentes</div>
+          <div class="metric-value" id="count-pendentes">0</div>
+        </div>
+        <p class="small-note">Agendamentos ainda nao realizados.</p>
+      </article>
+      <article class="card metric-card">
+        <div>
+          <div class="eyebrow">Concluidos</div>
+          <div class="metric-value" id="count-concluidos">0</div>
+        </div>
+        <p class="small-note">Agendamentos marcados como realizados.</p>
+      </article>
+    </section>
+
+    <section class="analytics-grid">
+      <div class="stack">
+        <article class="panel">
+          <div class="eyebrow">Receita</div>
+          <h2>Faturamento mensal</h2>
+          <p class="helper">Janela dos ultimos 6 meses para leitura de volume e valor.</p>
+          <div id="monthly-revenue" class="bar-list"><div class="empty-state">Carregando historico...</div></div>
+        </article>
+        <article class="panel">
+          <div class="eyebrow">Agenda</div>
+          <h2>Proximos 7 dias</h2>
+          <p class="helper">Carga de atendimento para a semana movel.</p>
+          <div id="next-seven-days" class="bar-list"><div class="empty-state">Carregando agenda...</div></div>
+        </article>
+      </div>
+
+      <div class="stack">
+        <article class="panel">
+          <div class="eyebrow">Financeiro</div>
+          <h2>Forma de pagamento</h2>
+          <p class="helper">Distribuicao do faturamento informado por meio de pagamento.</p>
+          <div id="payment-breakdown" class="bar-list"><div class="empty-state">Carregando pagamentos...</div></div>
+        </article>
+        <article class="panel">
+          <div class="eyebrow">Relacionamento</div>
+          <h2>Clientes em destaque</h2>
+          <p class="helper">Ranking por faturamento informado no banco atual.</p>
+          <div id="top-clients" class="list"><div class="empty-state">Carregando clientes...</div></div>
+        </article>
+      </div>
     </section>
 
     <section class="recent-grid">
       <div class="panel">
         <div class="eyebrow">Orcamentos</div>
         <h2>Ultimos registros</h2>
-        <div id="recent-quotes" class="list"><div class="small-note">Carregando dados...</div></div>
+        <div id="recent-quotes" class="list"><div class="empty-state">Carregando dados...</div></div>
       </div>
       <div class="panel">
         <div class="eyebrow">Agenda</div>
         <h2>Proximos agendamentos</h2>
-        <div id="recent-schedules" class="list"><div class="small-note">Carregando dados...</div></div>
+        <div id="recent-schedules" class="list"><div class="empty-state">Carregando dados...</div></div>
       </div>
     </section>
 
@@ -187,39 +393,122 @@
   <script>
     const auth = window.HomeWashAuth;
     const flash = document.getElementById('flash');
+    const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const numberFormatter = new Intl.NumberFormat('pt-BR');
 
     function setFlash(message, type = '') {
       flash.textContent = message || '';
       flash.className = `flash ${type}`.trim();
     }
 
+    function formatCurrency(value) {
+      return moneyFormatter.format(Number(value || 0));
+    }
+
+    function formatNumber(value) {
+      return numberFormatter.format(Number(value || 0));
+    }
+
     function renderList(targetId, items, emptyMessage, mapper) {
       const target = document.getElementById(targetId);
       if (!Array.isArray(items) || !items.length) {
-        target.innerHTML = `<div class="small-note">${emptyMessage}</div>`;
+        target.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
         return;
       }
       target.innerHTML = items.map(mapper).join('');
     }
 
+    function renderBars(targetId, items, emptyMessage, options = {}) {
+      const target = document.getElementById(targetId);
+      if (!Array.isArray(items) || !items.length) {
+        target.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+        return;
+      }
+      const maxValue = Math.max(...items.map((item) => Number(options.value(item) || 0)), 1);
+      target.innerHTML = items.map((item) => {
+        const value = Number(options.value(item) || 0);
+        const percentage = Math.max(6, Math.round((value / maxValue) * 100));
+        const tone = options.tone ? options.tone(item) : '';
+        return `
+          <article class="bar-item">
+            <div class="bar-head">
+              <strong>${options.label(item)}</strong>
+              <span>${options.valueLabel(item)}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill ${tone}" style="width:${percentage}%"></div>
+            </div>
+            <div class="meta-line">${options.meta ? options.meta(item) : ''}</div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderOverview(counts, analytics) {
+      const overview = analytics.overview || {};
+      const schedules = (analytics.schedules || {}).cards || {};
+      document.getElementById('count-clientes').textContent = formatNumber(counts.clientes || 0);
+      document.getElementById('count-agendamentos').textContent = formatNumber(counts.agendamentos || 0);
+      document.getElementById('count-orcamentos').textContent = formatNumber(counts.orcamentos_total || 0);
+      document.getElementById('count-orcamentos-mes').textContent = formatNumber(overview.orcamentos_mes_atual || 0);
+      document.getElementById('count-pendentes').textContent = formatNumber(schedules.pendentes || 0);
+      document.getElementById('count-concluidos').textContent = formatNumber(schedules.concluidos || 0);
+      document.getElementById('hero-faturamento').textContent = formatCurrency(overview.faturamento_total || 0);
+      document.getElementById('hero-ticket').textContent = formatCurrency(overview.ticket_medio || 0);
+      document.getElementById('metric-pagamentos').textContent = formatNumber(overview.pagamentos_informados || 0);
+      document.getElementById('metric-agenda-mes').textContent = formatNumber(schedules.mes_atual || 0);
+      document.getElementById('metric-concluidos-mes').textContent = formatNumber(schedules.mes_concluidos || 0);
+      document.getElementById('metric-atrasados').textContent = formatNumber(schedules.atrasados || 0);
+    }
+
     async function loadDashboard() {
       try {
-        const user = auth.getStoredUser() || {};
+        const session = await auth.requireAuth({ redirectOnFail: true });
+        const user = (session && session.user) || auth.getStoredUser() || {};
         document.getElementById('user-line').textContent = `${user.nome || user.login || 'Operacao Local'} ativa`;
         document.getElementById('api-line').textContent = auth.getApiBase() || 'URL da API nao configurada';
 
         const payload = await auth.apiFetch('/api/dashboard/summary');
         const data = payload.data || {};
         const counts = data.counts || {};
-        document.getElementById('count-clientes').textContent = counts.clientes || 0;
-        document.getElementById('count-agendamentos').textContent = counts.agendamentos || 0;
-        document.getElementById('count-orcamentos').textContent = counts.orcamentos_recentes || 0;
+        const analytics = data.analytics || {};
+
+        renderOverview(counts, analytics);
+
+        renderBars('monthly-revenue', analytics.monthly_revenue || [], 'Nenhum faturamento registrado nos ultimos meses.', {
+          label: (item) => item.label || '-',
+          value: (item) => item.total || 0,
+          valueLabel: (item) => formatCurrency(item.total || 0),
+          meta: (item) => `${formatNumber(item.count || 0)} orcamento(s) no periodo`,
+        });
+
+        renderBars('payment-breakdown', analytics.payment_breakdown || [], 'Nenhum pagamento informado ainda.', {
+          label: (item) => item.label || '-',
+          value: (item) => item.total || 0,
+          valueLabel: (item) => formatCurrency(item.total || 0),
+          meta: (item) => `${formatNumber(item.count || 0)} registro(s)`,
+          tone: (item) => item.label === 'PIX' ? 'success' : item.label === 'Nao definido' ? 'warning' : '',
+        });
+
+        renderBars('next-seven-days', ((analytics.schedules || {}).next_7_days) || [], 'Nenhum atendimento previsto para os proximos dias.', {
+          label: (item) => item.label || '-',
+          value: (item) => item.count || 0,
+          valueLabel: (item) => `${formatNumber(item.count || 0)} ag.`,
+          meta: () => 'Carga prevista no recorte semanal',
+        });
+
+        renderList('top-clients', analytics.top_clients || [], 'Nenhum cliente com faturamento informado ainda.', (item, index) => `
+          <article class="list-item">
+            <strong><span>${index + 1}. ${item.cliente || 'Cliente sem nome'}</span><span>${formatCurrency(item.total || 0)}</span></strong>
+            <span>${formatNumber(item.orcamentos || 0)} orcamento(s) com valor informado.</span>
+          </article>
+        `);
 
         renderList('recent-quotes', data.recent_quotes || [], 'Nenhum orcamento recente.', (item) => `
           <article class="list-item">
             <strong>#${item.id} ${item.cliente || 'Cliente sem nome'}</strong>
             <span>${item.data || '-'} | ${item.servico || '-'}</span>
-            <span>PIX: ${Number(item.total_pix || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            <span>Valor cobrado: ${formatCurrency(item.valor_cobrado || 0)} | PIX estimado: ${formatCurrency(item.total_pix || 0)}</span>
           </article>
         `);
 
@@ -231,11 +520,16 @@
           </article>
         `);
 
-        setFlash('Painel carregado com sucesso.', 'success');
+        setFlash('Dashboard analitico carregado com sucesso.', 'success');
       } catch (error) {
         setFlash(error.message, 'error');
       }
     }
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await auth.logout();
+      window.location.href = auth.buildLoginUrl('dashboard.html');
+    });
 
     loadDashboard();
   </script>

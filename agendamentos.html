@@ -182,9 +182,64 @@
     .saved-client-select {
       margin-top: 10px;
     }
+    .month-filters {
+      display: grid;
+      grid-template-columns: 160px minmax(0, 1fr) auto;
+      gap: 12px;
+      margin: 16px 0;
+      align-items: end;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-chip {
+      border-radius: 18px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+    }
+    .summary-chip strong,
+    .summary-chip span {
+      display: block;
+    }
+    .summary-chip strong {
+      font-size: 1.55rem;
+      margin-top: 6px;
+    }
+    .schedule-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 8px;
+    }
+    .schedule-badge.pending {
+      background: rgba(18, 183, 194, 0.14);
+      color: #b9f5fa;
+    }
+    .schedule-badge.done {
+      background: rgba(135, 240, 183, 0.12);
+      color: #b7f7d1;
+    }
+    .schedule-badge.late {
+      background: rgba(255, 106, 99, 0.12);
+      color: #ffd5d2;
+    }
+    .section-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 22px 0;
+    }
     .empty { color: var(--muted); padding: 14px 0; }
     @media (max-width: 980px) {
       .layout, .grid-two { grid-template-columns: 1fr; }
+      .month-filters, .summary-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -296,7 +351,30 @@
 
       <section class="list-card">
         <div class="eyebrow">Agenda atual</div>
-        <h2>Agendamentos recentes</h2>
+        <h2>Atendimentos do mes</h2>
+        <div class="small-note">Recorte mensal com busca por cliente e filtro de concluidos, como no fluxo do sistema legado.</div>
+        <div class="month-filters">
+          <div class="field" style="margin-top:0;">
+            <label for="month-filter">Mes</label>
+            <input id="month-filter" type="month" />
+          </div>
+          <div class="field" style="margin-top:0;">
+            <label for="month-client-search">Buscar cliente</label>
+            <input id="month-client-search" type="search" placeholder="Digite parte do nome do cliente" />
+          </div>
+          <label class="toggle" style="margin:0;">
+            <input id="month-show-completed" type="checkbox" />
+            <span>Mostrar concluidos</span>
+          </label>
+        </div>
+        <div id="month-summary" class="summary-grid"></div>
+        <div id="month-list" class="schedule-list">
+          <div class="empty">Nenhum atendimento do mes carregado ainda.</div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <h3 style="margin:0;">Todos os agendamentos</h3>
         <div class="actions" style="margin-top: 10px;">
           <button id="refresh-schedules" type="button" class="secondary">Atualizar lista</button>
           <button id="sync-pending" type="button" class="secondary">Sincronizar pendentes</button>
@@ -318,6 +396,11 @@
     const scheduleList = document.getElementById('schedule-list');
     const pendingList = document.getElementById('pending-list');
     const pendingSummary = document.getElementById('pending-summary');
+    const monthSummary = document.getElementById('month-summary');
+    const monthList = document.getElementById('month-list');
+    const monthFilterInput = document.getElementById('month-filter');
+    const monthClientSearch = document.getElementById('month-client-search');
+    const monthShowCompleted = document.getElementById('month-show-completed');
     const clientSavedSelect = document.getElementById('cliente-saved');
     const clientInput = document.getElementById('cliente');
     const clientList = document.getElementById('clientes-list');
@@ -427,6 +510,143 @@
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
 
+    function parseBrDate(value) {
+      const text = String(value || '').trim();
+      const parts = text.split('/');
+      if (parts.length !== 3) return null;
+      const year = Number(parts[2]);
+      const month = Number(parts[1]) - 1;
+      const day = Number(parts[0]);
+      if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+      const result = new Date(year, month, day);
+      result.setHours(0, 0, 0, 0);
+      return Number.isNaN(result.getTime()) ? null : result;
+    }
+
+    function scheduleStatus(item) {
+      const dateRef = parseBrDate(item && item.data_agendada);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (item && item.servico_realizado) {
+        return { label: 'Realizado', tone: 'done' };
+      }
+      if (dateRef && dateRef.getTime() < today.getTime()) {
+        return { label: 'Atrasado', tone: 'late' };
+      }
+      return { label: 'Pendente', tone: 'pending' };
+    }
+
+    function selectedMonthParts() {
+      const value = String(monthFilterInput.value || '').trim();
+      const parts = value.split('-');
+      if (parts.length !== 2) {
+        const now = new Date();
+        return { year: now.getFullYear(), month: now.getMonth() };
+      }
+      return {
+        year: Number(parts[0]),
+        month: Number(parts[1]) - 1,
+      };
+    }
+
+    function renderMonthSummary(items) {
+      const summary = { total: 0, pendentes: 0, concluidos: 0, atrasados: 0 };
+      items.forEach((item) => {
+        summary.total += 1;
+        const status = scheduleStatus(item);
+        if (status.tone === 'done') summary.concluidos += 1;
+        else if (status.tone === 'late') summary.atrasados += 1;
+        else summary.pendentes += 1;
+      });
+
+      monthSummary.innerHTML = [
+        ['Total no mes', summary.total],
+        ['Pendentes', summary.pendentes],
+        ['Concluidos', summary.concluidos],
+        ['Atrasados', summary.atrasados],
+      ].map(([label, value]) => `
+        <article class="summary-chip">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </article>
+      `).join('');
+    }
+
+    async function toggleScheduleStatus(id, realized) {
+      const item = cachedSchedules.find((schedule) => Number(schedule.id) === Number(id));
+      if (!item) {
+        setFlash('Agendamento nao encontrado para atualizar status.', 'error');
+        return;
+      }
+      if (!apiAvailable) {
+        setFlash('A alteracao de status precisa de API online.', 'error');
+        return;
+      }
+      const payload = {
+        ...item,
+        servico_realizado: Boolean(realized),
+      };
+      try {
+        await apiFetch('/api/schedules', { method: 'PUT', body: JSON.stringify(payload) });
+        await loadSchedules();
+        setFlash(`Agendamento #${id} atualizado para ${realized ? 'realizado' : 'pendente'}.`, 'success');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    }
+
+    function renderMonthlySchedules(items) {
+      const { year, month } = selectedMonthParts();
+      const search = String(monthClientSearch.value || '').trim().toLowerCase();
+      const showCompleted = monthShowCompleted.checked;
+
+      const monthItems = (Array.isArray(items) ? items : []).filter((item) => {
+        const dateRef = parseBrDate(item.data_agendada);
+        return dateRef && dateRef.getFullYear() === year && dateRef.getMonth() === month;
+      }).sort((left, right) => {
+        const leftDate = parseBrDate(left.data_agendada);
+        const rightDate = parseBrDate(right.data_agendada);
+        return (leftDate ? leftDate.getTime() : 0) - (rightDate ? rightDate.getTime() : 0);
+      });
+
+      renderMonthSummary(monthItems);
+
+      const visibleItems = monthItems.filter((item) => {
+        const matchesClient = !search || String(item.cliente || '').toLowerCase().includes(search);
+        const matchesStatus = showCompleted || !item.servico_realizado;
+        return matchesClient && matchesStatus;
+      });
+
+      if (!visibleItems.length) {
+        monthList.innerHTML = '<div class="empty">Nenhum atendimento encontrado para os filtros selecionados.</div>';
+        return;
+      }
+
+      monthList.innerHTML = visibleItems.map((item) => {
+        const status = scheduleStatus(item);
+        return `
+          <article class="schedule-card">
+            <span class="schedule-badge ${status.tone}">${status.label}</span>
+            <strong>#${item.id} ${item.cliente || 'Cliente sem nome'}</strong>
+            <span class="schedule-meta">Data: ${item.data_agendada || '-'} | Horario: ${item.horario || '-'} | Periodo: ${item.periodo || '-'}</span>
+            <span class="schedule-meta">Responsavel: ${item.responsavel_nome || '-'} | E-mail: ${item.responsavel_email || '-'}</span>
+            <span class="schedule-meta">Observacao: ${item.observacao || '-'}</span>
+            <div class="actions" style="margin-top: 12px;">
+              <button type="button" class="secondary" data-edit-month="${item.id}">Editar</button>
+              <button type="button" class="secondary" data-toggle-status="${item.id}" data-next-status="${item.servico_realizado ? '0' : '1'}">${item.servico_realizado ? 'Marcar pendente' : 'Marcar concluido'}</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      monthList.querySelectorAll('[data-edit-month]').forEach((button) => {
+        button.addEventListener('click', () => fillScheduleForm(button.dataset.editMonth));
+      });
+      monthList.querySelectorAll('[data-toggle-status]').forEach((button) => {
+        button.addEventListener('click', () => toggleScheduleStatus(button.dataset.toggleStatus, button.dataset.nextStatus === '1'));
+      });
+    }
+
     function inferPeriodo(horario) {
       const text = String(horario || '').trim();
       const hour = Number((text.split(':')[0] || '0'));
@@ -517,6 +737,8 @@
     }
 
     function renderSchedules(items) {
+      renderMonthlySchedules(items);
+
       if (!Array.isArray(items) || !items.length) {
         scheduleList.innerHTML = '<div class="empty">Nenhum agendamento cadastrado.</div>';
         return;
@@ -696,6 +918,9 @@
       }
     });
     document.getElementById('sync-pending').addEventListener('click', syncPendingSchedules);
+    monthFilterInput.addEventListener('change', () => renderMonthlySchedules(cachedSchedules));
+    monthClientSearch.addEventListener('input', () => renderMonthlySchedules(cachedSchedules));
+    monthShowCompleted.addEventListener('change', () => renderMonthlySchedules(cachedSchedules));
     clientSavedSelect.addEventListener('change', (event) => {
       if (!event.target.value) return;
       clientInput.value = event.target.value;
@@ -712,6 +937,7 @@
     window.addEventListener('focus', renderClientSuggestions);
     window.addEventListener('pageshow', renderClientSuggestions);
     document.getElementById('responsavel-nome').value = 'Operacao Local';
+    monthFilterInput.value = new Date().toISOString().slice(0, 7);
     renderClientSuggestions();
     renderPendingSchedules();
     testApi();

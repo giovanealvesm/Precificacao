@@ -322,6 +322,12 @@
       font-size: 0.92rem;
       padding: 12px 0 4px;
     }
+    .history-filters {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 180px;
+      gap: 12px;
+      margin-top: 14px;
+    }
 
     .sync-card {
       border-radius: 18px;
@@ -352,6 +358,7 @@
     @media (max-width: 900px) {
       .intro, .layout, .form-grid, .metric-grid { grid-template-columns: 1fr; }
       .topbar { flex-direction: column; align-items: flex-start; }
+      .history-filters { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -517,9 +524,51 @@
         </section>
 
         <section class="result-card">
+          <div class="eyebrow">Balanco</div>
+          <h3>Resumo financeiro do historico</h3>
+          <p class="lead">Leitura rapida do faturamento informado nos orcamentos ja salvos na base atual.</p>
+          <div id="balance-metrics" class="metric-grid">
+            <div class="metric">
+              <span>Faturamento real</span>
+              <strong>R$ 0,00</strong>
+            </div>
+            <div class="metric">
+              <span>Ticket medio</span>
+              <strong>R$ 0,00</strong>
+            </div>
+            <div class="metric">
+              <span>PIX</span>
+              <strong>R$ 0,00</strong>
+            </div>
+            <div class="metric">
+              <span>Cartao</span>
+              <strong>R$ 0,00</strong>
+            </div>
+          </div>
+          <div id="balance-breakdown" class="history-list">
+            <div class="history-empty">Nenhum dado financeiro carregado ainda.</div>
+          </div>
+        </section>
+
+        <section class="result-card">
           <div class="eyebrow">Historico recente</div>
           <h3>Ultimos orcamentos gravados</h3>
           <p class="lead">Leitura basica do banco pelo frontend estatico, via API separada.</p>
+          <div class="history-filters">
+            <div class="field" style="margin:0;">
+              <label for="history-search">Buscar no historico</label>
+              <input id="history-search" type="search" placeholder="Cliente, servico ou tipo" />
+            </div>
+            <div class="field" style="margin:0;">
+              <label for="history-payment-filter">Pagamento</label>
+              <select id="history-payment-filter">
+                <option value="Todos">Todos</option>
+                <option value="PIX">PIX</option>
+                <option value="Cartao">Cartao</option>
+                <option value="Nao definido">Nao definido</option>
+              </select>
+            </div>
+          </div>
           <div class="actions" style="margin-top: 10px;">
             <button id="refresh-history" type="button" class="secondary">Atualizar historico</button>
           </div>
@@ -604,7 +653,11 @@
     const flash = document.getElementById('flash');
     const pixTotal = document.getElementById('pix-total');
     const cardTotal = document.getElementById('card-total');
+    const balanceMetrics = document.getElementById('balance-metrics');
+    const balanceBreakdown = document.getElementById('balance-breakdown');
     const historyList = document.getElementById('history-list');
+    const historySearchInput = document.getElementById('history-search');
+    const historyPaymentFilter = document.getElementById('history-payment-filter');
     const pendingList = document.getElementById('pending-list');
     const syncStatus = document.getElementById('sync-status');
     const quoteItemsList = document.getElementById('quote-items-list');
@@ -1032,19 +1085,111 @@
       return normalizeBaseUrl(apiInput.value);
     }
 
+    function parseQuoteDate(value) {
+      const text = String(value || '').trim();
+      if (!text) return null;
+      const [datePart] = text.split(' ');
+      const parts = datePart.split('/');
+      if (parts.length !== 3) return null;
+      const parsed = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+      parsed.setHours(0, 0, 0, 0);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function normalizePayment(value) {
+      const text = String(value || '').toLowerCase();
+      if (text.includes('pix')) return 'PIX';
+      if (text.includes('cart')) return 'Cartao';
+      return 'Nao definido';
+    }
+
+    function renderBalance(items) {
+      const data = Array.isArray(items) ? items : [];
+      if (!data.length) {
+        balanceMetrics.innerHTML = `
+          <div class="metric"><span>Faturamento real</span><strong>R$ 0,00</strong></div>
+          <div class="metric"><span>Ticket medio</span><strong>R$ 0,00</strong></div>
+          <div class="metric"><span>PIX</span><strong>R$ 0,00</strong></div>
+          <div class="metric"><span>Cartao</span><strong>R$ 0,00</strong></div>
+        `;
+        balanceBreakdown.innerHTML = '<div class="history-empty">Nenhum dado financeiro carregado ainda.</div>';
+        return;
+      }
+
+      let faturamento = 0;
+      let pix = 0;
+      let cartao = 0;
+      let naoDefinido = 0;
+      let mesAtual = 0;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      data.forEach((item) => {
+        const valor = Number(item.valor_cobrado || 0);
+        const forma = normalizePayment(item.forma_pagamento || '');
+        const dateRef = parseQuoteDate(item.data || '');
+        faturamento += valor;
+        if (forma === 'PIX') pix += valor;
+        else if (forma === 'Cartao') cartao += valor;
+        else naoDefinido += valor;
+        if (dateRef && dateRef.getFullYear() === now.getFullYear() && dateRef.getMonth() === now.getMonth()) {
+          mesAtual += valor;
+        }
+      });
+
+      const ticketMedio = faturamento / data.length;
+      const pagamentoDefinido = data.filter((item) => normalizePayment(item.forma_pagamento || '') !== 'Nao definido').length;
+
+      balanceMetrics.innerHTML = `
+        <div class="metric"><span>Faturamento real</span><strong>${currency(faturamento)}</strong></div>
+        <div class="metric"><span>Ticket medio</span><strong>${currency(ticketMedio)}</strong></div>
+        <div class="metric"><span>PIX</span><strong>${currency(pix)}</strong></div>
+        <div class="metric"><span>Cartao</span><strong>${currency(cartao)}</strong></div>
+      `;
+
+      balanceBreakdown.innerHTML = [
+        { label: 'Mes atual', value: mesAtual, meta: 'Faturamento informado no mes corrente.' },
+        { label: 'Pagamentos informados', value: pagamentoDefinido, meta: `${pagamentoDefinido} registro(s) com forma de pagamento definida.` },
+        { label: 'Sem definicao', value: naoDefinido, meta: 'Valor ainda sem forma de pagamento registrada.' },
+      ].map((item) => `
+        <article class="history-item">
+          <strong>${item.label}</strong>
+          <span class="history-money">${item.label === 'Pagamentos informados' ? item.value : currency(item.value)}</span>
+          <span class="history-meta">${item.meta}</span>
+        </article>
+      `).join('');
+    }
+
     function renderHistory(items) {
       recentQuotes = Array.isArray(items) ? items : [];
+      renderBalance(recentQuotes);
+
       if (!Array.isArray(items) || !items.length) {
         historyList.innerHTML = '<div class="history-empty">Nenhum orcamento salvo ainda.</div>';
         return;
       }
 
-      historyList.innerHTML = items.map((item) => `
+      const search = String(historySearchInput.value || '').trim().toLowerCase();
+      const payment = String(historyPaymentFilter.value || 'Todos');
+      const visibleItems = recentQuotes.filter((item) => {
+        const matchesSearch = !search || [item.cliente, item.servico, item.tipo, item.sujidade]
+          .some((value) => String(value || '').toLowerCase().includes(search));
+        const matchesPayment = payment === 'Todos' || normalizePayment(item.forma_pagamento || '') === payment;
+        return matchesSearch && matchesPayment;
+      });
+
+      if (!visibleItems.length) {
+        historyList.innerHTML = '<div class="history-empty">Nenhum orcamento encontrado para os filtros atuais.</div>';
+        return;
+      }
+
+      historyList.innerHTML = visibleItems.slice(0, 12).map((item) => `
         <article class="history-item">
           <strong>#${item.id} ${escapeHtml(item.cliente || 'Cliente sem nome')}</strong>
           <span class="history-meta">${escapeHtml(item.data || '-')} | ${escapeHtml(item.servico || '-')} | ${escapeHtml(item.tipo || '-')}</span>
           <span class="history-meta">Largura: ${escapeHtml(item.largura || '-')} | Sujidade: ${escapeHtml(item.sujidade || '-')}</span>
           <span class="history-meta">Itens: ${Number(item.item_count || 0) || 1}</span>
+          <span class="history-meta">Pagamento: ${escapeHtml(normalizePayment(item.forma_pagamento || ''))} | Valor cobrado: ${currency(item.valor_cobrado || 0)}</span>
           <span class="history-money">PIX: ${currency(item.total_pix)} | Cartao: ${currency(item.total_cartao)}</span>
           <div class="history-actions">
             ${item.web_editable
@@ -1138,7 +1283,7 @@
         renderHistory([]);
         return;
       }
-      const payload = await apiFetch('/api/quotes/recent?limit=8');
+      const payload = await apiFetch('/api/quotes/recent?limit=50');
       auth.rememberClientList(payload.data || []);
       renderHistory(payload.data || []);
     }
@@ -1392,6 +1537,8 @@
         setFlash(error.message, 'error');
       }
     });
+    historySearchInput.addEventListener('input', () => renderHistory(recentQuotes));
+    historyPaymentFilter.addEventListener('change', () => renderHistory(recentQuotes));
     serviceSelect.addEventListener('change', updateModelOptions);
     modelSelect.addEventListener('change', updateSpecialFields);
     window.addEventListener('storage', renderKnownClients);
