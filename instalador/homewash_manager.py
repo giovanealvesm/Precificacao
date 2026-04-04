@@ -33,6 +33,7 @@ ENV_PATH = BASE_DIR / ".env"
 MANAGER_HOST = "127.0.0.1"
 MANAGER_PORT = 8766
 RESTORE_SIGNAL = b"SHOW_HOMEWASH_MANAGER"
+OPEN_SYNC_SIGNAL = b"OPEN_HOMEWASH_SYNC"
 PID_FILES = [
     BASE_DIR / "streamlit_pro.pid",
     BASE_DIR / "cloudflare_tunnel.pid",
@@ -1132,6 +1133,8 @@ class HomeWashManager(tk.Tk):
                   payload = client.recv(128)
                   if payload == RESTORE_SIGNAL:
                       self.after(0, self.restore_from_tray)
+                  elif payload == OPEN_SYNC_SIGNAL:
+                      self.after(0, self.open_sync_hub)
               except OSError:
                   pass
               finally:
@@ -1221,10 +1224,10 @@ class HomeWashManager(tk.Tk):
             self.tray_icon = None
 
 
-def notify_existing_manager():
+def notify_existing_manager(signal=RESTORE_SIGNAL):
     try:
         client = socket.create_connection((MANAGER_HOST, MANAGER_PORT), timeout=1.5)
-        client.sendall(RESTORE_SIGNAL)
+        client.sendall(signal)
         client.close()
         return True
     except OSError:
@@ -1232,7 +1235,11 @@ def notify_existing_manager():
 
 
 if __name__ == "__main__":
-    if notify_existing_manager():
+    open_sync_on_start = "--open-sync" in sys.argv[1:]
+    signal = OPEN_SYNC_SIGNAL if open_sync_on_start else RESTORE_SIGNAL
+    if notify_existing_manager(signal=signal):
         sys.exit(0)
     app = HomeWashManager()
+    if open_sync_on_start:
+        app.after(800, app.open_sync_hub)
     app.mainloop()

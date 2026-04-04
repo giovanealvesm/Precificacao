@@ -106,27 +106,6 @@ def _candidate_cloudflare_logs(log_path):
             resultado.append(abs_path)
     return resultado
 
-def obter_link_ngrok(tentativas=15, espera=3):
-    """Aguarda o ngrok iniciar e retorna o link público"""
-    print("[NGROK] Aguardando ngrok iniciar...")
-    for i in range(tentativas):
-        try:
-            with urllib.request.urlopen("http://localhost:4040/api/tunnels", timeout=3) as resp:
-                dados = json.loads(resp.read().decode())
-                tunnels = dados.get("tunnels", [])
-                for t in tunnels:
-                    url = t.get("public_url", "")
-                    if url.startswith("https://"):
-                        print(f"[NGROK] Link encontrado: {url}")
-                        return url
-        except Exception:
-            pass
-        print(f"[NGROK] Tentativa {i+1}/{tentativas} - aguardando {espera}s...")
-        time.sleep(espera)
-    print("[NGROK] Não foi possível obter o link do ngrok.")
-    return None
-
-
 def obter_link_cloudflare(log_path, tentativas=30, espera=2):
     """Lê o log do cloudflared e extrai o link trycloudflare"""
     print("[CLOUDFLARE] Aguardando link do tunnel...")
@@ -423,7 +402,6 @@ if __name__ == "__main__":
     if ip_local:
         print(f"[OK] IP Local: {ip_local}")
 
-    # Seleciona provedor por argumento: cloudflare (default) ou ngrok
     provider = "cloudflare"
     link = None
     if len(sys.argv) > 1:
@@ -456,7 +434,8 @@ if __name__ == "__main__":
         api_link = api_public_url_env or obter_link_cloudflare(api_log_path, tentativas=20, espera=2)
         api_link = garantir_link_cloudflare_ativo(api_link, api_log_path, tentativas=4, espera=3)
     else:
-        link = obter_link_ngrok()
+        print("[AVISO] Somente o modo cloudflare e suportado neste projeto.")
+        link = None
         control_link = None
         api_link = None
         web_public_url = obter_url_web_publica()
@@ -475,7 +454,7 @@ if __name__ == "__main__":
         print("[WHATSAPP] Enviando WhatsApp...")
         enviar_whatsapp(link, ambiente_teste=ambiente_teste)
     else:
-        print("[AVISO] Link publico não encontrado. Verifique tunnel/ngrok em execução.")
+        print("[AVISO] Link publico não encontrado. Verifique os tunnels do Cloudflare em execução.")
         if ip_local:
             print(f"[AVISO] Usando IP local como fallback: http://{ip_local}:8501")
             enviar_email(f"http://{ip_local}:8501", ip_local)
