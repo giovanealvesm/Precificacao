@@ -16,7 +16,18 @@
     return `https://${clean}`;
   }
 
+  function getApiUrlFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = params.get('api') || params.get('apiUrl') || params.get('api_url') || '';
+    return normalizeBaseUrl(queryValue);
+  }
+
   function getConfiguredApiUrl() {
+    const queryApiUrl = getApiUrlFromQuery();
+    if (queryApiUrl) {
+      localStorage.setItem(API_URL_KEY, queryApiUrl);
+      return queryApiUrl;
+    }
     const stored = localStorage.getItem(API_URL_KEY) || '';
     if (stored) return normalizeBaseUrl(stored);
     const config = window.HOME_WASH_CONFIG || {};
