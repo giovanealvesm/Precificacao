@@ -177,7 +177,7 @@
         <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
         <div>
           <strong>Home Wash Web App</strong>
-          <span>Modulo de agendamentos em frontend estatico + API</span>
+          <span>Modulo de agendamentos para uso direto pela operacao</span>
         </div>
       </div>
       <div class="nav-links">
@@ -191,7 +191,7 @@
 
     <div class="toolbar">
       <div class="status-pill offline" id="api-status">API desconectada</div>
-      <div class="small-note">Esta primeira migracao cobre CRUD basico de agenda sem sincronizacao Google nem envio de notificacoes.</div>
+      <div class="small-note">Esta tela cobre o CRUD basico da agenda com validacao dos dados no backend.</div>
     </div>
 
     <main class="layout">
@@ -492,11 +492,8 @@
     document.getElementById('horario').addEventListener('change', (event) => {
       document.getElementById('periodo').value = inferPeriodo(event.target.value);
     });
-    auth.requireAuth().then(() => testApi()).catch((error) => {
-      if (error && error.code !== 401) {
-        setFlash(error.message, 'error');
-      }
-    });
+    document.getElementById('responsavel-nome').value = 'Operacao Local';
+    testApi();
   </script>
 </body>
 </html>

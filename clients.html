@@ -162,7 +162,7 @@
         <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
         <div>
           <strong>Home Wash Web App</strong>
-          <span>Modulo de clientes em frontend estatico + API</span>
+          <span>Modulo de clientes para uso direto pela operacao</span>
         </div>
       </div>
       <div class="nav-links">
@@ -176,7 +176,7 @@
 
     <div class="toolbar">
       <div class="status-pill offline" id="api-status">API desconectada</div>
-      <div class="small-note">Esta tela cobre cadastro, listagem e exclusao basica de clientes pela nova API.</div>
+      <div class="small-note">Esta tela cobre cadastro, listagem e exclusao basica de clientes, com validacao no backend.</div>
     </div>
 
     <main class="layout">
@@ -290,6 +290,7 @@
       ['nome', 'telefone', 'email', 'endereco', 'proxima-agenda', 'criado-por', 'notas'].forEach((id) => {
         document.getElementById(id).value = '';
       });
+      document.getElementById('criado-por').value = 'Operacao Local';
     }
 
     function fillClientForm(nome) {
@@ -396,11 +397,8 @@
         setFlash(error.message, 'error');
       }
     });
-    auth.requireAuth().then(() => testApi()).catch((error) => {
-      if (error && error.code !== 401) {
-        setFlash(error.message, 'error');
-      }
-    });
+    document.getElementById('criado-por').value = 'Operacao Local';
+    testApi();
   </script>
 </body>
 </html>

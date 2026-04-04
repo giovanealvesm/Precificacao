@@ -1,8 +1,12 @@
 (function () {
   const API_URL_KEY = 'homewash.apiUrl';
-  const TOKEN_KEY = 'homewash.authToken';
   const USER_KEY = 'homewash.authUser';
-  const EXPIRES_KEY = 'homewash.authExpiresAt';
+  const DEFAULT_USER = {
+    login: 'operacao-local',
+    nome: 'Operacao Local',
+    email: '',
+    is_admin: true,
+  };
 
   function normalizeBaseUrl(url) {
     const clean = String(url || '').trim().replace(/\/$/, '');
@@ -36,29 +40,25 @@
   }
 
   function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || '';
+    return '';
   }
 
   function getStoredUser() {
     const raw = localStorage.getItem(USER_KEY) || '';
-    if (!raw) return null;
+    if (!raw) return { ...DEFAULT_USER };
     try {
-      return JSON.parse(raw);
+      return { ...DEFAULT_USER, ...JSON.parse(raw) };
     } catch (error) {
-      return null;
+      return { ...DEFAULT_USER };
     }
   }
 
   function setSession(data) {
-    localStorage.setItem(TOKEN_KEY, data.token || '');
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user || {}));
-    localStorage.setItem(EXPIRES_KEY, data.expires_at || '');
+    localStorage.setItem(USER_KEY, JSON.stringify({ ...DEFAULT_USER, ...(data.user || {}) }));
   }
 
   function clearSession() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(EXPIRES_KEY);
+    localStorage.setItem(USER_KEY, JSON.stringify(DEFAULT_USER));
   }
 
   async function apiFetch(path, options = {}) {
@@ -68,20 +68,9 @@
     }
 
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    const token = getToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
 
     const response = await fetch(`${base}${path}`, { ...options, headers });
     const payload = await response.json().catch(() => ({}));
-
-    if (response.status === 401) {
-      clearSession();
-      const error = new Error(payload.error || 'Sessao invalida ou expirada.');
-      error.code = 401;
-      throw error;
-    }
 
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.error || 'Falha ao falar com a API.');
@@ -91,49 +80,24 @@
   }
 
   function buildLoginUrl() {
-    const current = window.location.pathname.split('/').pop() || 'dashboard.html';
-    return `login.html?next=${encodeURIComponent(current)}`;
+    return 'dashboard.html';
   }
 
   async function requireAuth() {
-    if (!getToken()) {
-      window.location.href = buildLoginUrl();
-      throw new Error('Sessao nao encontrada.');
-    }
-
-    try {
-      const payload = await apiFetch('/api/auth/me');
-      if (payload && payload.data && payload.data.user) {
-        localStorage.setItem(USER_KEY, JSON.stringify(payload.data.user));
-      }
-      return payload.data;
-    } catch (error) {
-      if (error.code === 401) {
-        window.location.href = buildLoginUrl();
-      }
-      throw error;
-    }
+    const user = getStoredUser();
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    return { user, expires_at: '' };
   }
 
   async function login(usuario, senha) {
-    const payload = await apiFetch('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ usuario, senha }),
-    });
-    setSession(payload.data || {});
-    return payload.data;
+    const nome = String(usuario || '').trim() || DEFAULT_USER.nome;
+    const data = { user: { ...DEFAULT_USER, login: nome.toLowerCase().replace(/\s+/g, '-'), nome } };
+    setSession(data);
+    return { ...data, expires_at: '' };
   }
 
   async function logout() {
-    try {
-      await apiFetch('/api/auth/logout', { method: 'POST' });
-    } catch (error) {
-      if (error.code !== 401) {
-        throw error;
-      }
-    } finally {
-      clearSession();
-    }
+    clearSession();
   }
 
   function bindApiInput(input) {

@@ -609,14 +609,14 @@
       const pendingCount = getPendingQueue().length;
       if (apiAvailable && authenticatedSession) {
         syncStatus.textContent = pendingCount
-          ? `API online e autenticada. ${pendingCount} orcamento(s) pendente(s) aguardando sincronizacao.`
-          : 'API online e autenticada. Nenhum orcamento pendente.';
+          ? `API online. ${pendingCount} orcamento(s) pendente(s) aguardando sincronizacao.`
+          : 'API online. Nenhum orcamento pendente.';
         return;
       }
       if (apiAvailable) {
         syncStatus.textContent = pendingCount
-          ? `API online, mas sem sessao. ${pendingCount} orcamento(s) pendente(s) salvo(s) localmente.`
-          : 'API online, mas sem sessao. Voce ainda pode calcular e enfileirar orcamentos.';
+          ? `API online. ${pendingCount} orcamento(s) pendente(s) salvo(s) localmente.`
+          : 'API online. Voce pode calcular, salvar e sincronizar orcamentos.';
         return;
       }
       syncStatus.textContent = pendingCount
@@ -758,7 +758,7 @@
     }
 
     async function loadRecentQuotes() {
-      if (!apiAvailable || !authenticatedSession) {
+      if (!apiAvailable) {
         renderHistory([]);
         return;
       }
@@ -779,6 +779,7 @@
       try {
         await apiFetch('/health');
         apiAvailable = true;
+        authenticatedSession = true;
         setApiStatus(true, 'API conectada');
         if (!metadata) {
           await loadMetadata();
@@ -788,6 +789,7 @@
         setFlash('API pronta para uso.', 'success');
       } catch (error) {
         apiAvailable = false;
+        authenticatedSession = false;
         setApiStatus(false, 'API desconectada');
         if (!metadata) {
           metadata = buildLocalMetadata();
@@ -830,7 +832,7 @@
         pixTotal.textContent = currency(lastQuote.total_pix);
         cardTotal.textContent = currency(lastQuote.total_cartao);
 
-        if (apiAvailable && authenticatedSession) {
+        if (apiAvailable) {
           const payload = await apiFetch('/api/quote/save', { method: 'POST', body: JSON.stringify(currentPayload) });
           lastQuote = payload.data;
           pixTotal.textContent = currency(lastQuote.total_pix);
@@ -853,8 +855,8 @@
         setFlash('Nao ha orcamentos pendentes para sincronizar.', 'success');
         return;
       }
-      if (!apiAvailable || !authenticatedSession) {
-        setFlash('A sincronizacao precisa de API online e sessao autenticada.', 'error');
+      if (!apiAvailable) {
+        setFlash('A sincronizacao precisa de API online.', 'error');
         return;
       }
 
@@ -906,24 +908,7 @@
       updateModelOptions();
     });
 
-    if (!currentApiBase()) {
-      authenticatedSession = false;
-      testApi();
-    } else if (auth.getToken()) {
-      auth.requireAuth().then(() => {
-        authenticatedSession = true;
-        return testApi();
-      }).catch((error) => {
-        authenticatedSession = false;
-        testApi();
-        if (error && error.code !== 401) {
-          setFlash(error.message, 'error');
-        }
-      });
-    } else {
-      authenticatedSession = false;
-      testApi();
-    }
+    testApi();
   </script>
 </body>
 </html>

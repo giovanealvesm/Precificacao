@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Home Wash Web App | Login</title>
-  <meta name="description" content="Acesso web ao painel da Home Wash com frontend estatico e API separada." />
+  <title>Home Wash Web App | Acesso</title>
+  <meta name="description" content="Acesso simplificado ao painel da Home Wash com configuracao da API quando necessario." />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <script src="landing_page_config.js"></script>
   <script src="auth_web.js"></script>
@@ -106,8 +106,8 @@
   <main class="login-shell">
     <section class="panel">
       <div class="eyebrow">Acesso web</div>
-      <h1>Entrar no painel da Home Wash</h1>
-      <p class="lead">Este fluxo usa a base local de usuarios do sistema atual para proteger o frontend estatico e os modulos ja migrados.</p>
+      <h1>Abrir o painel da Home Wash</h1>
+      <p class="lead">O login deixou de ser necessario para o seu uso interno. Esta tela ficou apenas como atalho para configurar a API e abrir os modulos principais.</p>
 
       <div class="field">
         <label for="api-url">URL da API</label>
@@ -118,39 +118,30 @@
         <button id="test-api" type="button" class="secondary">Testar conexao</button>
       </div>
 
-      <form id="login-form">
-        <div class="field">
-          <label for="usuario">Usuario ou e-mail</label>
-          <input id="usuario" type="text" autocomplete="username" placeholder="AdmHWS" />
-        </div>
-        <div class="field">
-          <label for="senha">Senha</label>
-          <input id="senha" type="password" autocomplete="current-password" placeholder="Sua senha" />
-        </div>
-        <div class="actions">
-          <button type="submit">Entrar</button>
-          <a class="link-button secondary" href="index.html">Voltar para a landing</a>
-        </div>
-      </form>
+      <div class="actions">
+        <a class="link-button" href="dashboard.html">Abrir painel</a>
+        <a class="link-button secondary" href="app.html">Abrir orcamentos</a>
+        <a class="link-button secondary" href="index.html">Voltar para a landing</a>
+      </div>
       <div id="flash" class="flash"></div>
     </section>
 
     <aside class="panel">
-      <div class="eyebrow">Migracao</div>
+      <div class="eyebrow">Uso simplificado</div>
       <h2>Fluxo atual</h2>
-      <p class="small-note">A autenticacao web abre o painel inicial e libera os modulos de orcamento, clientes e agendamentos pela nova API.</p>
+      <p class="small-note">Agora o app web abre direto nas telas principais. A API continua opcional para salvar, consultar e sincronizar os dados.</p>
       <div class="metric-list">
         <div class="metric">
-          <strong>1. Login pela base existente</strong>
-          <span class="small-note">Usuarios do SQLite local continuam sendo a fonte de verdade.</span>
+          <strong>1. Sem login obrigatorio</strong>
+          <span class="small-note">O acesso foi simplificado para o seu uso individual no dia a dia.</span>
         </div>
         <div class="metric">
-          <strong>2. Sessao no navegador</strong>
-          <span class="small-note">O token fica salvo localmente e eh reenviado para as rotas protegidas.</span>
+          <strong>2. API opcional</strong>
+          <span class="small-note">Quando a API estiver online, clientes, agenda e historico usam a base local normalmente.</span>
         </div>
         <div class="metric">
-          <strong>3. Navegacao central</strong>
-          <span class="small-note">Depois do login, o painel concentra os modulos ja migrados.</span>
+          <strong>3. Dados validados</strong>
+          <span class="small-note">Cliente, telefone, e-mails e agenda continuam sendo validados no backend antes de gravar.</span>
         </div>
       </div>
     </aside>
@@ -177,31 +168,11 @@
       try {
         auth.saveApiInput(apiInput);
         await auth.apiFetch('/health');
-        setFlash('API acessivel para login.', 'success');
+        setFlash('API acessivel para uso do painel.', 'success');
       } catch (error) {
         setFlash(error.message, 'error');
       }
     });
-
-    document.getElementById('login-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        auth.saveApiInput(apiInput);
-        const usuario = document.getElementById('usuario').value.trim();
-        const senha = document.getElementById('senha').value;
-        await auth.login(usuario, senha);
-        window.location.href = auth.getNextPage('dashboard.html');
-      } catch (error) {
-        setFlash(error.message, 'error');
-      }
-    });
-
-    if (auth.getToken()) {
-      auth.requireAuth().then(() => {
-        window.location.href = auth.getNextPage('dashboard.html');
-      }).catch(() => {
-      });
-    }
   </script>
 </body>
 </html>

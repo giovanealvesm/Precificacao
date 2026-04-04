@@ -115,14 +115,13 @@
         <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
         <div>
           <strong>Home Wash Web App</strong>
-          <span id="user-line">Carregando sessao...</span>
+          <span id="user-line">Uso local simplificado</span>
         </div>
       </div>
       <div class="nav-links">
         <a href="app.html">Orcamentos</a>
         <a href="clients.html">Clientes</a>
         <a href="agendamentos.html">Agendamentos</a>
-        <button id="logout-button" type="button">Sair</button>
       </div>
     </div>
 
@@ -142,7 +141,7 @@
         <h2>API atual</h2>
         <p class="small-note" id="api-line">Aguardando configuracao...</p>
         <div class="actions" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
-          <a href="login.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Trocar login</a>
+          <a href="app.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Abrir orcamentos</a>
           <a href="index.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Landing publica</a>
         </div>
       </div>
@@ -202,9 +201,8 @@
 
     async function loadDashboard() {
       try {
-        const session = await auth.requireAuth();
-        const user = (session && session.user) || auth.getStoredUser() || {};
-        document.getElementById('user-line').textContent = `${user.nome || user.login || 'Usuario'} conectado`;
+        const user = auth.getStoredUser() || {};
+        document.getElementById('user-line').textContent = `${user.nome || user.login || 'Operacao Local'} ativa`;
         document.getElementById('api-line').textContent = auth.getApiBase() || 'URL da API nao configurada';
 
         const payload = await auth.apiFetch('/api/dashboard/summary');
@@ -235,14 +233,6 @@
         setFlash(error.message, 'error');
       }
     }
-
-    document.getElementById('logout-button').addEventListener('click', async () => {
-      try {
-        await auth.logout();
-      } finally {
-        window.location.href = 'login.html';
-      }
-    });
 
     loadDashboard();
   </script>
