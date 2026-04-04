@@ -1,4 +1,5 @@
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -12,12 +13,36 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-BASE_DIR = SCRIPT_DIR.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+BUNDLE_BASE_DIR = SCRIPT_DIR.parent
+
+
+def resolve_project_base_dir():
+    candidates = [BUNDLE_BASE_DIR]
+    executable_path = getattr(sys, "executable", "")
+    if executable_path:
+        candidates.append(Path(executable_path).resolve().parent)
+
+    seen = set()
+    for candidate in candidates:
+        for current in [candidate, *candidate.parents]:
+            normalized = str(current).lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            if (current / "api_server.py").exists() and (current / "instalador").exists():
+                return current
+            if (current / ".env").exists() and (current / "config_env.py").exists():
+                return current
+
+    return BUNDLE_BASE_DIR
+
+
+BASE_DIR = resolve_project_base_dir()
+for path_item in (BUNDLE_BASE_DIR, BASE_DIR):
+    if str(path_item) not in sys.path:
+        sys.path.insert(0, str(path_item))
 
 from config_env import carregar_env_arquivo, ler_env_variavel, salvar_env_variavel
-from remote_control import extract_trycloudflare_link
 
 try:
     import pystray  # type: ignore[import-not-found]
@@ -30,10 +55,12 @@ except Exception:
 
 
 ENV_PATH = BASE_DIR / ".env"
+EXTERNAL_BACKUP_DIR = Path.home() / "Documents" / "Backup CRM"
 MANAGER_HOST = "127.0.0.1"
 MANAGER_PORT = 8766
 RESTORE_SIGNAL = b"SHOW_HOMEWASH_MANAGER"
 OPEN_SYNC_SIGNAL = b"OPEN_HOMEWASH_SYNC"
+TRYCLOUDFLARE_LINK_RE = re.compile(r"https://[a-zA-Z0-9\-.]+\.trycloudflare\.com")
 PID_FILES = [
     BASE_DIR / "streamlit_pro.pid",
     BASE_DIR / "cloudflare_tunnel.pid",
@@ -41,13 +68,30 @@ PID_FILES = [
     BASE_DIR / "control_tunnel.pid",
 ]
 
+
+def extract_trycloudflare_link(log_path):
+    if not log_path or not os.path.exists(log_path):
+        return None
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as file_obj:
+            content = file_obj.read()
+    except OSError:
+        return None
+
+    matches = TRYCLOUDFLARE_LINK_RE.findall(content)
+    return matches[-1] if matches else None
+
 ENV_FIELDS = [
     ("APP_EMAIL_SENDER", "Email remetente"),
     ("APP_EMAIL_PASSWORD", "Senha app email", True),
     ("ALERTA_EMAIL_DESTINO", "Email destino link"),
     ("ALERTA_WHATSAPP_NUMERO", "WhatsApp destino (opcional)"),
+    ("APP_WEB_FRONTEND_URL", "URL frontend web (opcional)"),
+    ("APP_API_PUBLIC_URL", "URL publica da API web (opcional)"),
     ("APP_PUBLIC_URL", "URL publica app (opcional)"),
     ("APP_CONTROL_URL", "URL publica controle (opcional)"),
+    ("CF_API_TUNNEL_TOKEN", "Token tunnel API web (opcional)", True),
     ("CF_TUNNEL_TOKEN", "Token tunnel app (opcional)", True),
     ("CF_CONTROL_TUNNEL_TOKEN", "Token tunnel controle (opcional)", True),
     ("APP_GOOGLE_CALENDAR_SYNC", "Google Calendar ativo (0/1)"),
@@ -296,6 +340,9 @@ class HomeWashManager(tk.Tk):
             parent,
             [
                 ("Abrir sincronizacao web", self.open_sync_hub),
+                ("Backup agora", self.run_external_backup),
+                ("Restaurar ultimo backup", self.restore_external_backup),
+                ("Abrir pasta do backup", self.open_external_backup_folder),
                 ("Abrir CRM local", self.open_local_url),
                 ("Ver startup_log", self.open_startup_log),
                 ("Configurar iniciar com Windows", self.enable_startup),
@@ -306,7 +353,7 @@ class HomeWashManager(tk.Tk):
 
         notes = ttk.Label(
             parent,
-            text="Observacao: no modo remoto, o sistema inicia CRM + tunnel + envio de link automaticamente.",
+            text="Observacao: no modo remoto, o sistema inicia o app web + API + tunnels. O CRM legado 8501 so sobe se APP_ENABLE_LEGACY_CRM=1.",
         )
         notes.pack(anchor="w", pady=(12, 0))
 
@@ -336,11 +383,11 @@ class HomeWashManager(tk.Tk):
 
         checklist_lines = [
             "1. cloudflared.exe precisa existir na pasta do projeto ou no PATH.",
-            "2. Sem dominio (gratis): deixe tokens/URL em branco e use Quick Tunnel temporario.",
-            "3. Com dominio (estavel): preencha CF_TUNNEL_TOKEN para o app principal (porta 8501).",
-            "4. Com dominio (estavel): preencha APP_PUBLIC_URL com a URL publica fixa do CRM.",
+            "2. Sem dominio (gratis): deixe tokens/URL em branco e use Quick Tunnel temporario da API web.",
+            "3. Com dominio (estavel): preencha CF_API_TUNNEL_TOKEN para a API publica (porta 8787).",
+            "4. Com dominio (estavel): preencha APP_API_PUBLIC_URL com a URL publica fixa da API.",
             "5. Opcional: preencha CF_CONTROL_TUNNEL_TOKEN e APP_CONTROL_URL para reinicio remoto.",
-            "6. Salve as configuracoes e inicie em modo remoto.",
+            "6. O CRM legado 8501 e opcional e fica desligado por padrao no fluxo web-first.",
         ]
         for line in checklist_lines:
             ttk.Label(checklist, text=line).pack(anchor="w", pady=2)
@@ -471,7 +518,14 @@ class HomeWashManager(tk.Tk):
             messagebox.showerror("Falha ao iniciar", str(exc))
 
     def start_free_remote_mode(self):
-        for key in ("CF_TUNNEL_TOKEN", "APP_PUBLIC_URL", "CF_CONTROL_TUNNEL_TOKEN", "APP_CONTROL_URL"):
+        for key in (
+            "CF_TUNNEL_TOKEN",
+            "APP_PUBLIC_URL",
+            "CF_CONTROL_TUNNEL_TOKEN",
+            "APP_CONTROL_URL",
+            "CF_API_TUNNEL_TOKEN",
+            "APP_API_PUBLIC_URL",
+        ):
             self.inputs[key].set("")
             salvar_env_variavel(str(BASE_DIR), key, "")
 
@@ -576,6 +630,10 @@ class HomeWashManager(tk.Tk):
     def open_project_folder(self):
         subprocess.run(["explorer", str(BASE_DIR)], check=False)
 
+    def open_external_backup_folder(self):
+        EXTERNAL_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["explorer", str(EXTERNAL_BACKUP_DIR)], check=False)
+
     def open_cloudflare_guide(self):
         guide_path = BASE_DIR / "GUIA_CLOUDFLARE.md"
         if guide_path.exists():
@@ -591,6 +649,88 @@ class HomeWashManager(tk.Tk):
         if not log_path.exists():
             log_path.write_text("", encoding="utf-8")
         subprocess.run(["notepad", str(log_path)], check=False)
+
+    def _run_script_with_message(self, script_name: str, success_message: str, start_action: str, finish_action: str, stop_before=False):
+        script_path = BASE_DIR / script_name
+        if not script_path.exists():
+            messagebox.showerror("Script nao encontrado", f"Arquivo nao encontrado: {script_path.name}")
+            return
+
+        def worker():
+            try:
+                if stop_before:
+                    self._stop_by_pid_files()
+                    self._stop_by_commandline()
+                    time.sleep(1)
+
+                result = subprocess.run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(script_path),
+                    ],
+                    cwd=str(BASE_DIR),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+                output = (result.stdout or "").strip()
+
+                def done_success():
+                    self._mark_action(finish_action)
+                    self.refresh_status()
+                    messagebox.showinfo("Sucesso", success_message + (f"\n\n{output}" if output else ""))
+
+                self.after(0, done_success)
+            except subprocess.CalledProcessError as exc:
+                error_text = (exc.stdout or "") + ("\n" if exc.stdout and exc.stderr else "") + (exc.stderr or "")
+
+                def done_error():
+                    messagebox.showerror(
+                        "Falha na automacao",
+                        f"Nao foi possivel concluir a operacao.\n\n{error_text.strip() or str(exc)}",
+                    )
+
+                self.after(0, done_error)
+
+        self._mark_action(start_action)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_external_backup(self):
+        self._run_script_with_message(
+            "backup_crm_externo.ps1",
+            "Backup externo concluido. A pasta Documentos\\Backup CRM foi atualizada.",
+            "Backup externo iniciado",
+            "Backup externo concluido",
+        )
+
+    def restore_external_backup(self):
+        backup_current = EXTERNAL_BACKUP_DIR / "atual" / "dados"
+        if not backup_current.exists():
+            messagebox.showwarning(
+                "Backup indisponivel",
+                "Nao encontrei a pasta Documentos\\Backup CRM\\atual\\dados. Gere um backup antes de restaurar.",
+            )
+            return
+
+        answer = messagebox.askyesno(
+            "Restaurar ultimo backup",
+            "Essa acao vai sobrescrever os dados locais com o ultimo backup salvo e antes disso faz um backup de seguranca do estado atual.\n\nDeseja continuar?",
+        )
+        if not answer:
+            return
+
+        self._run_script_with_message(
+            "restaurar_backup_crm_externo.ps1",
+            "Restauracao concluida. Os dados locais foram substituidos pelo ultimo backup salvo.",
+            "Restauracao do backup iniciada",
+            "Restauracao do backup concluida",
+            stop_before=True,
+        )
 
     def resend_remote_email(self):
         sender = self.inputs["APP_EMAIL_SENDER"].get().strip()
@@ -666,16 +806,17 @@ class HomeWashManager(tk.Tk):
 
     def test_public_link(self):
         self._load_env()
-        target_url = self.inputs["APP_PUBLIC_URL"].get().strip()
+        target_url = self._get_active_api_public_url() or self._build_sync_hub_url()
         if not target_url:
             messagebox.showwarning(
                 "URL nao preenchida",
-                "Preencha primeiro o campo APP_PUBLIC_URL ou use o assistente de tunnel nomeado.",
+                "Preencha primeiro APP_API_PUBLIC_URL ou use o assistente de tunnel nomeado para a API web.",
             )
             self.notebook.select(1)
             return
 
-        target_url = self._normalize_url(target_url)
+        if "/health" not in target_url and "sync.html" not in target_url:
+            target_url = f"{self._normalize_url(target_url)}/health"
 
         def worker():
             outcome = self._probe_url(target_url)
@@ -726,14 +867,16 @@ class HomeWashManager(tk.Tk):
 
             main_token = ler_env_variavel(str(BASE_DIR), "CF_TUNNEL_TOKEN", "").strip()
             main_url = ler_env_variavel(str(BASE_DIR), "APP_PUBLIC_URL", "").strip()
+            api_token = ler_env_variavel(str(BASE_DIR), "CF_API_TUNNEL_TOKEN", "").strip()
+            api_url = ler_env_variavel(str(BASE_DIR), "APP_API_PUBLIC_URL", "").strip()
 
-            if not main_token or not main_url:
+            if not ((api_token and api_url) or (main_token and main_url)):
                 def open_wizard_msg():
                     self._load_env()
                     messagebox.showwarning(
                         "Faltam dados do Cloudflare",
                         (
-                            "Para concluir a correcao automatica, faltam o token e/ou a URL publica principal.\n\n"
+                            "Para concluir a correcao automatica, faltam os dados da API publica e/ou do link principal legado.\n\n"
                             "Vai abrir o assistente para voce colar esses dados."
                         ),
                     )
@@ -760,7 +903,9 @@ class HomeWashManager(tk.Tk):
                     text=True,
                 )
 
-            target_url = self._normalize_url(main_url)
+            target_url = self._build_sync_hub_url() or self._get_active_api_public_url() or self._normalize_url(main_url)
+            if target_url and "/health" not in target_url and "sync.html" not in target_url:
+                target_url = f"{target_url}/health"
             outcome = (False, None, "timeout")
             for _ in range(6):
                 outcome = self._probe_url(target_url, timeout=12)
@@ -800,11 +945,11 @@ class HomeWashManager(tk.Tk):
 
     def open_public_link(self):
         self._load_env()
-        target_url = self._get_active_public_url()
+        target_url = self._build_sync_hub_url() or self._get_active_api_public_url() or self._get_active_public_url()
         if not target_url:
             messagebox.showwarning(
                 "URL nao preenchida",
-                "Nenhuma URL publica foi encontrada ainda. Se estiver em modo gratis, aguarde a URL trycloudflare aparecer e tente novamente.",
+                "Nenhuma URL publica foi encontrada ainda. Se estiver em modo gratis, aguarde a URL trycloudflare da API aparecer e tente novamente.",
             )
             self.notebook.select(1)
             return
@@ -814,11 +959,11 @@ class HomeWashManager(tk.Tk):
 
     def copy_public_link(self):
         self._load_env()
-        target_url = self._get_active_public_url()
+        target_url = self._build_sync_hub_url() or self._get_active_api_public_url() or self._get_active_public_url()
         if not target_url:
             messagebox.showwarning(
                 "URL nao preenchida",
-                "Nenhuma URL publica foi encontrada ainda. Se estiver em modo gratis, aguarde a URL trycloudflare aparecer e tente novamente.",
+                "Nenhuma URL publica foi encontrada ainda. Se estiver em modo gratis, aguarde a URL trycloudflare da API aparecer e tente novamente.",
             )
             self.notebook.select(1)
             return
@@ -863,10 +1008,12 @@ class HomeWashManager(tk.Tk):
         fields_frame.pack(fill="both", expand=True)
 
         wizard_fields = [
-            ("CF_TUNNEL_TOKEN", "Token principal do CRM", True),
-            ("APP_PUBLIC_URL", "URL publica principal"),
+            ("CF_API_TUNNEL_TOKEN", "Token da API web (8787)", True),
+            ("APP_API_PUBLIC_URL", "URL publica da API web"),
             ("CF_CONTROL_TUNNEL_TOKEN", "Token do controle remoto", True),
             ("APP_CONTROL_URL", "URL publica do controle remoto"),
+            ("CF_TUNNEL_TOKEN", "Token principal do CRM legado (opcional)", True),
+            ("APP_PUBLIC_URL", "URL publica principal legado (opcional)"),
         ]
         vars_map = {}
         for row, field in enumerate(wizard_fields):
@@ -884,7 +1031,7 @@ class HomeWashManager(tk.Tk):
 
         helper = ttk.Label(
             wrapper,
-            text="Obrigatorio para link estavel: token principal + URL principal. Controle remoto e opcional.",
+            text="Obrigatorio para o app web: token da API 8787 + URL publica da API. Controle remoto e opcional. CRM legado e opcional.",
         )
         helper.pack(anchor="w", pady=(6, 10))
 
@@ -900,15 +1047,17 @@ class HomeWashManager(tk.Tk):
         ttk.Button(buttons, text="Cancelar", command=dialog.destroy).pack(side="right", padx=8)
 
     def apply_named_tunnel_config(self, vars_map, dialog):
+        api_token = vars_map["CF_API_TUNNEL_TOKEN"].get().strip()
+        api_url = vars_map["APP_API_PUBLIC_URL"].get().strip()
         main_token = vars_map["CF_TUNNEL_TOKEN"].get().strip()
         main_url = vars_map["APP_PUBLIC_URL"].get().strip()
         control_token = vars_map["CF_CONTROL_TUNNEL_TOKEN"].get().strip()
         control_url = vars_map["APP_CONTROL_URL"].get().strip()
 
-        if not main_token or not main_url:
+        if not ((api_token and api_url) or (main_token and main_url)):
             messagebox.showerror(
                 "Campos obrigatorios",
-                "Preencha pelo menos o token principal e a URL publica principal para configurar o link estavel.",
+                "Preencha pelo menos o token da API web e a URL publica da API para configurar o link estavel do app web.",
                 parent=dialog,
             )
             return
@@ -923,6 +1072,10 @@ class HomeWashManager(tk.Tk):
             str(script_path),
             "-ProjectDir",
             str(BASE_DIR),
+            "-ApiToken",
+            api_token,
+            "-ApiUrl",
+            api_url,
             "-MainToken",
             main_token,
             "-MainUrl",
@@ -1030,17 +1183,17 @@ class HomeWashManager(tk.Tk):
             return (False, None, str(exc))
 
     def _remote_ready_for_stable_link(self):
-        app_token = self.inputs["CF_TUNNEL_TOKEN"].get().strip()
-        app_url = self.inputs["APP_PUBLIC_URL"].get().strip()
-        return bool(self._cloudflared_exists() and app_token and app_url)
+        api_token = self.inputs["CF_API_TUNNEL_TOKEN"].get().strip()
+        api_url = self.inputs["APP_API_PUBLIC_URL"].get().strip()
+        return bool(self._cloudflared_exists() and api_token and api_url)
 
     def _update_cloudflare_summary(self):
         if self._remote_ready_for_stable_link():
-            self.cloudflare_status_var.set("Cloudflare: pronto para link estavel no celular")
+            self.cloudflare_status_var.set("Cloudflare: API pronta para link estavel")
             control_ready = bool(
                 self.inputs["CF_CONTROL_TUNNEL_TOKEN"].get().strip() and self.inputs["APP_CONTROL_URL"].get().strip()
             )
-            details = ["cloudflared detectado", "token principal configurado", "URL publica principal configurada"]
+            details = ["cloudflared detectado", "token da API configurado", "URL publica da API configurada"]
             if control_ready:
                 details.append("controle remoto configurado")
             else:
@@ -1048,39 +1201,41 @@ class HomeWashManager(tk.Tk):
             self.cloudflare_detail_var.set(" | ".join(details))
             return
 
-        quick_url = self._get_quick_tunnel_url()
+        quick_url = self._get_quick_api_tunnel_url()
         if quick_url and self._cloudflared_exists():
-            self.cloudflare_status_var.set("Cloudflare: Quick Tunnel ativo")
+            self.cloudflare_status_var.set("Cloudflare: Quick Tunnel da API ativo")
             self.cloudflare_detail_var.set(
-                f"URL temporaria detectada: {quick_url} | Se houver erro 530, aguarde alguns segundos e teste novamente."
+                f"URL temporaria da API detectada: {quick_url} | O app web deve sincronizar usando essa URL. Se houver erro 530, aguarde alguns segundos e teste novamente."
             )
             return
 
         missing = []
         if not self._cloudflared_exists():
             missing.append("cloudflared.exe")
-        if not self.inputs["CF_TUNNEL_TOKEN"].get().strip():
-            missing.append("CF_TUNNEL_TOKEN")
-        if not self.inputs["APP_PUBLIC_URL"].get().strip():
-            missing.append("APP_PUBLIC_URL")
+        if not self.inputs["CF_API_TUNNEL_TOKEN"].get().strip():
+            missing.append("CF_API_TUNNEL_TOKEN")
+        if not self.inputs["APP_API_PUBLIC_URL"].get().strip():
+            missing.append("APP_API_PUBLIC_URL")
 
-        self.cloudflare_status_var.set("Cloudflare: incompleto para link estavel")
+        self.cloudflare_status_var.set("Cloudflare: incompleto para link estavel da API")
         self.cloudflare_detail_var.set("Faltando: " + ", ".join(missing) if missing else "Configuracao parcial detectada.")
 
     def _build_cloudflare_report(self):
         items = []
         items.append(f"cloudflared.exe: {'OK' if self._cloudflared_exists() else 'FALTANDO'}")
-        items.append(f"CF_TUNNEL_TOKEN: {'OK' if self.inputs['CF_TUNNEL_TOKEN'].get().strip() else 'FALTANDO'}")
-        items.append(f"APP_PUBLIC_URL: {'OK' if self.inputs['APP_PUBLIC_URL'].get().strip() else 'FALTANDO'}")
+        items.append(f"CF_API_TUNNEL_TOKEN: {'OK' if self.inputs['CF_API_TUNNEL_TOKEN'].get().strip() else 'FALTANDO'}")
+        items.append(f"APP_API_PUBLIC_URL: {'OK' if self.inputs['APP_API_PUBLIC_URL'].get().strip() else 'FALTANDO'}")
+        items.append(f"CF_TUNNEL_TOKEN: {'OK' if self.inputs['CF_TUNNEL_TOKEN'].get().strip() else 'OPCIONAL'}")
+        items.append(f"APP_PUBLIC_URL: {'OK' if self.inputs['APP_PUBLIC_URL'].get().strip() else 'OPCIONAL'}")
         items.append(f"CF_CONTROL_TUNNEL_TOKEN: {'OK' if self.inputs['CF_CONTROL_TUNNEL_TOKEN'].get().strip() else 'OPCIONAL'}")
         items.append(f"APP_CONTROL_URL: {'OK' if self.inputs['APP_CONTROL_URL'].get().strip() else 'OPCIONAL'}")
 
         if self._remote_ready_for_stable_link():
             items.append("")
-            items.append("Resultado: o CRM esta pronto para usar link remoto estavel no celular.")
+            items.append("Resultado: o app web esta pronto para usar link remoto estavel no celular.")
         else:
             items.append("")
-            items.append("Resultado: se iniciar remoto agora, o sistema pode cair em Quick Tunnel temporario.")
+            items.append("Resultado: se iniciar remoto agora, o sistema pode usar Quick Tunnel temporario da API.")
 
         return "\n".join(items)
 

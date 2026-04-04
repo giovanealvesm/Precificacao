@@ -289,6 +289,23 @@ try {
     if ([string]::IsNullOrWhiteSpace($apiPublicUrl)) {
         Log-Warn "APP_API_PUBLIC_URL ausente. O app.html precisara de URL manual da API ate essa variavel ser configurada."
     }
+    $legacyCrmEnabledRaw = [Environment]::GetEnvironmentVariable("APP_ENABLE_LEGACY_CRM", "Process")
+    if ([string]::IsNullOrWhiteSpace($legacyCrmEnabledRaw)) {
+        $legacyCrmEnabledRaw = [Environment]::GetEnvironmentVariable("APP_ENABLE_LEGACY_CRM", "User")
+    }
+    if ([string]::IsNullOrWhiteSpace($legacyCrmEnabledRaw)) {
+        $legacyCrmEnabledRaw = [Environment]::GetEnvironmentVariable("APP_ENABLE_LEGACY_CRM", "Machine")
+    }
+    if ([string]::IsNullOrWhiteSpace($legacyCrmEnabledRaw)) {
+        $legacyCrmEnabledRaw = "0"
+    }
+    $legacyCrmEnabled = @("1", "true", "yes", "on") -contains $legacyCrmEnabledRaw.ToString().Trim().ToLowerInvariant()
+    if ($legacyCrmEnabled) {
+        Log-Info "CRM legado habilitado por APP_ENABLE_LEGACY_CRM=1. O Streamlit 8501 sera iniciado junto com o app web."
+    }
+    else {
+        Log-Info "CRM legado desativado por padrao. O fluxo remoto usara apenas o app web e a API 8787."
+    }
     if ([string]::IsNullOrWhiteSpace($controlTunnelToken)) {
         Log-Warn "CF_CONTROL_TUNNEL_TOKEN ausente. O controle remoto usara Quick Tunnel temporario."
     }
@@ -309,7 +326,15 @@ try {
     }
 
     if ($cloudflaredExe) {
-        if (-not (Test-ProcessAlive -PidFile $apiTunnelPidFile)) {
+        $apiUsesQuickTunnel = [string]::IsNullOrWhiteSpace($apiTunnelToken)
+        if ($apiUsesQuickTunnel) {
+            Stop-ProcessByPidFile -PidFile $apiTunnelPidFile
+            Stop-CloudflaredByUrl -UrlFragment "http://localhost:$apiPort"
+            Remove-Item -Force -ErrorAction SilentlyContinue $apiTunnelLog, $apiTunnelErr
+            Log-Info "Quick Tunnel da API sera reiniciado para gerar uma URL nova."
+        }
+
+        if ($apiUsesQuickTunnel -or -not (Test-ProcessAlive -PidFile $apiTunnelPidFile)) {
             Log-Info "Iniciando tunnel da API na porta $apiPort."
             $apiTunnelProcess = Start-CloudflareTunnel -CloudflaredExe $cloudflaredExe -ProjectDir $ProjectDir -LogFile $apiTunnelLog -ErrFile $apiTunnelErr -Url "http://localhost:$apiPort" -Token $apiTunnelToken -TunnelLabel "tunnel da API"
             Write-PidFile -PidFile $apiTunnelPidFile -ProcessId $apiTunnelProcess.Id
@@ -337,7 +362,15 @@ try {
     }
 
     if ($cloudflaredExe) {
-        if (-not (Test-ProcessAlive -PidFile $controlTunnelPidFile)) {
+        $controlUsesQuickTunnel = [string]::IsNullOrWhiteSpace($controlTunnelToken)
+        if ($controlUsesQuickTunnel) {
+            Stop-ProcessByPidFile -PidFile $controlTunnelPidFile
+            Stop-CloudflaredByUrl -UrlFragment "http://localhost:8765"
+            Remove-Item -Force -ErrorAction SilentlyContinue $controlTunnelLog, $controlTunnelErr
+            Log-Info "Quick Tunnel de controle sera reiniciado para gerar uma URL nova."
+        }
+
+        if ($controlUsesQuickTunnel -or -not (Test-ProcessAlive -PidFile $controlTunnelPidFile)) {
             Log-Info "Iniciando tunnel de controle remoto na porta 8765."
             Remove-Item -Force -ErrorAction SilentlyContinue $controlTunnelLog, $controlTunnelErr
             $controlTunnelProcess = Start-CloudflareTunnel -CloudflaredExe $cloudflaredExe -ProjectDir $ProjectDir -LogFile $controlTunnelLog -ErrFile $controlTunnelErr -Url "http://localhost:8765" -Token $controlTunnelToken -TunnelLabel "tunnel de controle"
@@ -351,34 +384,47 @@ try {
         Log-Warn "Tunnel de controle remoto nao iniciado porque cloudflared nao esta disponivel."
     }
 
-    if (Test-TcpPort -Port 8501) {
-        Log-Info "CRM Pro ja estava ativo na porta 8501."
+    if ($legacyCrmEnabled) {
+        if (Test-TcpPort -Port 8501) {
+            Log-Info "CRM Pro ja estava ativo na porta 8501."
+        }
+        else {
+            Log-Info "Iniciando CRM Pro em background na porta 8501."
+            $streamlitProcess = Start-Process -FilePath $pythonExe -ArgumentList @(
+                "-m", "streamlit", "run", "crm_pro.py",
+                "--server.port=8501",
+                "--server.address=0.0.0.0",
+                "--server.enableCORS=false",
+                "--server.enableXsrfProtection=false",
+                "--logger.level=error"
+            ) -WorkingDirectory $ProjectDir -WindowStyle Hidden -RedirectStandardOutput $streamlitLog -RedirectStandardError $streamlitErr -PassThru
+            Write-PidFile -PidFile $streamlitPidFile -ProcessId $streamlitProcess.Id
+
+            if (-not (Wait-ForPort -Port 8501 -Retries 25 -DelaySeconds 1)) {
+                throw "CRM Pro nao subiu na porta 8501."
+            }
+        }
     }
     else {
-        Log-Info "Iniciando CRM Pro em background na porta 8501."
-        $streamlitProcess = Start-Process -FilePath $pythonExe -ArgumentList @(
-            "-m", "streamlit", "run", "crm_pro.py",
-            "--server.port=8501",
-            "--server.address=0.0.0.0",
-            "--server.enableCORS=false",
-            "--server.enableXsrfProtection=false",
-            "--logger.level=error"
-        ) -WorkingDirectory $ProjectDir -WindowStyle Hidden -RedirectStandardOutput $streamlitLog -RedirectStandardError $streamlitErr -PassThru
-        Write-PidFile -PidFile $streamlitPidFile -ProcessId $streamlitProcess.Id
-
-        if (-not (Wait-ForPort -Port 8501 -Retries 25 -DelaySeconds 1)) {
-            throw "CRM Pro nao subiu na porta 8501."
-        }
+        Stop-ProcessByPidFile -PidFile $streamlitPidFile
+        Stop-ProcessByPidFile -PidFile $appTunnelPidFile
+        Stop-CloudflaredByUrl -UrlFragment "http://localhost:8501"
+        Log-Info "Inicializacao do CRM legado ignorada neste fluxo."
     }
 
     if ($cloudflaredExe) {
-        Stop-ProcessByPidFile -PidFile $appTunnelPidFile
-        Stop-CloudflaredByUrl -UrlFragment "http://localhost:8501"
+        if ($legacyCrmEnabled) {
+            Stop-ProcessByPidFile -PidFile $appTunnelPidFile
+            Stop-CloudflaredByUrl -UrlFragment "http://localhost:8501"
 
-        $appTunnelProcess = Start-CloudflareTunnel -CloudflaredExe $cloudflaredExe -ProjectDir $ProjectDir -LogFile $appTunnelLog -ErrFile $appTunnelErr -Url "http://localhost:8501" -Token $appTunnelToken -TunnelLabel "tunnel principal"
-        Write-PidFile -PidFile $appTunnelPidFile -ProcessId $appTunnelProcess.Id
+            $appTunnelProcess = Start-CloudflareTunnel -CloudflaredExe $cloudflaredExe -ProjectDir $ProjectDir -LogFile $appTunnelLog -ErrFile $appTunnelErr -Url "http://localhost:8501" -Token $appTunnelToken -TunnelLabel "tunnel principal"
+            Write-PidFile -PidFile $appTunnelPidFile -ProcessId $appTunnelProcess.Id
 
-        Start-Sleep -Seconds 5
+            Start-Sleep -Seconds 5
+        }
+        else {
+            Log-Info "Tunnel principal do CRM legado ignorado neste fluxo."
+        }
 
         Log-Info "Iniciando envio de link por email."
         Start-Process -FilePath $pythonExe -ArgumentList @("enviar_ip_email.py", "cloudflare") -WorkingDirectory $ProjectDir -WindowStyle Hidden -RedirectStandardOutput $emailLog -RedirectStandardError $emailErr | Out-Null

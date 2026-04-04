@@ -442,17 +442,23 @@ if __name__ == "__main__":
 
     ambiente_teste = contexto_teste_ativo(log_path if provider == "cloudflare" else "")
 
-    if link:
+    primary_link = link
+    if not primary_link and web_public_url:
+        primary_link = montar_link_web(web_public_url, "dashboard.html", api_link) or normalizar_url(web_public_url)
+    if not primary_link and api_link:
+        primary_link = api_link
+
+    if primary_link:
         print()
-        print(f"[LINK] {link}")
+        print(f"[LINK] {primary_link}")
         if api_link:
             print(f"[API] {api_link}")
         print()
         print("[EMAIL] Enviando email...")
-        enviar_email(link, ip_local, control_link, api_link=api_link, web_base_url=web_public_url, ambiente_teste=ambiente_teste)
+        enviar_email(primary_link, ip_local, control_link, api_link=api_link, web_base_url=web_public_url, ambiente_teste=ambiente_teste)
         print()
         print("[WHATSAPP] Enviando WhatsApp...")
-        enviar_whatsapp(link, ambiente_teste=ambiente_teste)
+        enviar_whatsapp(primary_link, ambiente_teste=ambiente_teste)
     else:
         print("[AVISO] Link publico não encontrado. Verifique os tunnels do Cloudflare em execução.")
         if ip_local:
