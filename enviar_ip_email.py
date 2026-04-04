@@ -261,6 +261,7 @@ def enviar_email(link_pro, ip_local=None, control_link=None, api_link=None, web_
         painel_url, restart_url = build_control_urls(control_link, token_controle)
         web_base = normalizar_url(web_base_url) or obter_url_web_publica()
         dashboard_sync_url = montar_link_web(web_base, "dashboard.html", api_link)
+        sync_hub_url = montar_link_web(web_base, "sync.html", api_link)
         clients_sync_url = montar_link_web(web_base, "clients.html", api_link)
         schedules_sync_url = montar_link_web(web_base, "agendamentos.html", api_link)
         quotes_sync_url = montar_link_web(web_base, "app.html", api_link)
@@ -289,15 +290,16 @@ def enviar_email(link_pro, ip_local=None, control_link=None, api_link=None, web_
             """
 
         card_sync = ""
-        if dashboard_sync_url:
+        if sync_hub_url:
             api_line = f'<p style="margin: 4px 0; color: {BRAND_COLORS["text"]}; font-size: 13px;"><strong>URL temporaria da API:</strong> {api_link}</p>' if api_link else ''
             card_sync = f"""
             <div style=\"background: linear-gradient(180deg, {BRAND_COLORS['surface_alt']} 0%, {BRAND_COLORS['surface']} 100%); padding: 16px; border-radius: 12px; margin: 14px 0 0; border: 1px solid {BRAND_COLORS['border']};\">
                 <p style=\"margin: 0 0 8px; color: {BRAND_COLORS['muted']}; font-size: 13px;\">Sincronizacao do app web</p>
                 <p style=\"margin: 0 0 10px; color: {BRAND_COLORS['text']}; font-size: 14px;\">Estes links ja abrem o painel web com a URL temporaria da API preenchida automaticamente. Basta abrir e usar o botao de sincronizar pendentes.</p>
                 <p style=\"margin: 0 0 12px;\">
-                    <a href=\"{dashboard_sync_url}\" style=\"display: inline-block; background-color: {BRAND_COLORS['primary']}; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: bold;\">Abrir painel web para sincronizar</a>
+                    <a href=\"{sync_hub_url}\" style=\"display: inline-block; background-color: {BRAND_COLORS['primary']}; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: bold;\">Abrir central de sincronizacao</a>
                 </p>
+                <p style=\"margin: 4px 0; color: {BRAND_COLORS['text']}; font-size: 13px;\"><strong>Central:</strong> {sync_hub_url}</p>
                 <p style=\"margin: 4px 0; color: {BRAND_COLORS['text']}; font-size: 13px;\"><strong>Painel:</strong> {dashboard_sync_url}</p>
                 <p style=\"margin: 4px 0; color: {BRAND_COLORS['text']}; font-size: 13px;\"><strong>Clientes:</strong> {clients_sync_url}</p>
                 <p style=\"margin: 4px 0; color: {BRAND_COLORS['text']}; font-size: 13px;\"><strong>Agendamentos:</strong> {schedules_sync_url}</p>

@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home Wash Web App | Sincronizacao</title>
+  <meta name="description" content="Central unica para sincronizar pendencias locais da Home Wash." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <script src="landing_page_config.js"></script>
+  <script src="auth_web.js"></script>
+  <style>
+    :root {
+      --surface: rgba(9, 21, 24, 0.92);
+      --surface-alt: rgba(13, 31, 36, 0.96);
+      --border: rgba(86, 173, 180, 0.32);
+      --text: #eff8f8;
+      --muted: #a4c3c7;
+      --primary: #0f9ca5;
+      --primary-strong: #12b7c2;
+      --danger: #ff6a63;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 156, 165, 0.22), transparent 38%),
+        radial-gradient(circle at bottom right, rgba(18, 183, 194, 0.18), transparent 32%),
+        linear-gradient(180deg, #061013 0%, #0b181c 100%);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .topbar, .panel, .card, .queue-card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface-alt) 0%, var(--surface) 100%);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+    }
+    .topbar {
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 42px; height: 42px; object-fit: contain; }
+    .brand strong { display: block; }
+    .brand span { display: block; color: var(--muted); font-size: 0.92rem; }
+    .nav-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+    }
+    .hero, .grid, .queues, .module-links { display: grid; gap: 20px; }
+    .hero { grid-template-columns: 1.1fr 0.9fr; margin-bottom: 20px; }
+    .grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 20px; }
+    .queues { grid-template-columns: repeat(3, 1fr); margin-bottom: 20px; }
+    .module-links { grid-template-columns: 1fr 1fr; }
+    .panel, .card, .queue-card { padding: 22px; }
+    .eyebrow {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--primary-strong);
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .lead, .small-note { color: var(--muted); line-height: 1.6; }
+    .metric-value { font-size: 2rem; font-weight: 800; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 8px 14px;
+      background: rgba(15, 156, 165, 0.14);
+      border: 1px solid rgba(18, 183, 194, 0.28);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .status-pill.offline {
+      background: rgba(255, 106, 99, 0.12);
+      border-color: rgba(255, 106, 99, 0.28);
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    button, .module-links a {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+      text-decoration: none;
+    }
+    button.secondary {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .queue-card strong, .queue-card span { display: block; }
+    .queue-card strong { font-size: 1rem; margin-bottom: 6px; }
+    .queue-meta { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .list { display: grid; gap: 12px; margin-top: 14px; }
+    .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
+    .flash.error { color: var(--danger); }
+    .flash.success { color: #87f0b7; }
+    .empty { color: var(--muted); padding: 12px 0; }
+    @media (max-width: 980px) {
+      .hero, .grid, .queues, .module-links { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
+        <div>
+          <strong>Home Wash Web App</strong>
+          <span>Central unica para sincronizar pendencias locais</span>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html">Painel</a>
+        <a href="clients.html">Clientes</a>
+        <a href="agendamentos.html">Agendamentos</a>
+        <a href="app.html">Orcamentos</a>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="panel">
+        <div class="eyebrow">Sincronizacao</div>
+        <h1>Um lugar so para enviar tudo que ficou pendente</h1>
+        <p class="lead">Esta tela usa os dados salvos neste mesmo navegador. Se os pendentes foram criados no celular, a sincronizacao precisa ser feita abrindo esta central no celular.</p>
+        <div class="actions">
+          <button id="sync-all" type="button">Sincronizar tudo agora</button>
+          <button id="test-api" type="button" class="secondary">Testar conexao</button>
+        </div>
+        <div id="flash" class="flash"></div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Conexao</div>
+        <div id="api-status" class="status-pill offline">API desconectada</div>
+        <p class="small-note" id="api-line" style="margin-top:14px;">Aguardando URL da API...</p>
+        <p class="small-note">Se voce abriu pelo email novo, a URL da API ja deve vir preenchida automaticamente.</p>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="eyebrow">Clientes</div>
+        <div class="metric-value" id="count-clients">0</div>
+        <p class="small-note">Cadastros pendentes de envio.</p>
+      </article>
+      <article class="card">
+        <div class="eyebrow">Agendamentos</div>
+        <div class="metric-value" id="count-schedules">0</div>
+        <p class="small-note">Agendamentos locais aguardando sincronizacao.</p>
+      </article>
+      <article class="card">
+        <div class="eyebrow">Orcamentos</div>
+        <div class="metric-value" id="count-quotes">0</div>
+        <p class="small-note">Orcamentos offline prontos para envio.</p>
+      </article>
+    </section>
+
+    <section class="queues">
+      <article class="queue-card">
+        <div class="eyebrow">Fila local</div>
+        <strong>Clientes</strong>
+        <div id="list-clients" class="list"><div class="empty">Nenhum cliente pendente.</div></div>
+      </article>
+      <article class="queue-card">
+        <div class="eyebrow">Fila local</div>
+        <strong>Agendamentos</strong>
+        <div id="list-schedules" class="list"><div class="empty">Nenhum agendamento pendente.</div></div>
+      </article>
+      <article class="queue-card">
+        <div class="eyebrow">Fila local</div>
+        <strong>Orcamentos</strong>
+        <div id="list-quotes" class="list"><div class="empty">Nenhum orcamento pendente.</div></div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="eyebrow">Atalhos</div>
+      <h2>Entrar em cada modulo, se precisar</h2>
+      <div class="module-links">
+        <a id="link-clients" href="clients.html">Abrir clientes</a>
+        <a id="link-schedules" href="agendamentos.html">Abrir agendamentos</a>
+        <a id="link-quotes" href="app.html">Abrir orcamentos</a>
+        <a id="link-dashboard" href="dashboard.html">Abrir painel</a>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const auth = window.HomeWashAuth;
+    const CLIENTS_KEY = 'homewash.pendingClients';
+    const SCHEDULES_KEY = 'homewash.pendingSchedules';
+    const QUOTES_KEY = 'homewash.pendingQuotes';
+    const flash = document.getElementById('flash');
+    const apiStatus = document.getElementById('api-status');
+    const apiLine = document.getElementById('api-line');
+
+    function setFlash(message, type = '') {
+      flash.textContent = message || '';
+      flash.className = `flash ${type}`.trim();
+    }
+
+    function readQueue(key) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function writeQueue(key, items) {
+      localStorage.setItem(key, JSON.stringify(Array.isArray(items) ? items : []));
+    }
+
+    function setApiConnected(ok, label) {
+      apiStatus.textContent = label;
+      apiStatus.classList.toggle('offline', !ok);
+    }
+
+    function formatDateTime(value) {
+      if (!value) return '-';
+      try {
+        return new Date(value).toLocaleString('pt-BR');
+      } catch (error) {
+        return String(value);
+      }
+    }
+
+    function renderList(targetId, items, mapper, emptyMessage) {
+      const target = document.getElementById(targetId);
+      if (!items.length) {
+        target.innerHTML = `<div class="empty">${emptyMessage}</div>`;
+        return;
+      }
+      target.innerHTML = items.map(mapper).join('');
+    }
+
+    function renderQueues() {
+      const clients = readQueue(CLIENTS_KEY);
+      const schedules = readQueue(SCHEDULES_KEY);
+      const quotes = readQueue(QUOTES_KEY);
+
+      document.getElementById('count-clients').textContent = clients.length;
+      document.getElementById('count-schedules').textContent = schedules.length;
+      document.getElementById('count-quotes').textContent = quotes.length;
+
+      renderList('list-clients', clients, (item) => `
+        <div class="queue-card" style="padding:14px; border-radius:18px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.025); box-shadow:none;">
+          <strong>${item.payload?.nome || 'Cliente sem nome'}</strong>
+          <span class="queue-meta">Criado em ${formatDateTime(item.created_at)}</span>
+          <span class="queue-meta">Telefone: ${item.payload?.telefone || '-'}</span>
+        </div>
+      `, 'Nenhum cliente pendente.');
+
+      renderList('list-schedules', schedules, (item) => `
+        <div class="queue-card" style="padding:14px; border-radius:18px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.025); box-shadow:none;">
+          <strong>${item.payload?.cliente || 'Cliente sem nome'}</strong>
+          <span class="queue-meta">${item.payload?.data_agendada || '-'} | ${item.payload?.horario || '-'}</span>
+          <span class="queue-meta">Responsavel: ${item.payload?.responsavel_nome || '-'}</span>
+        </div>
+      `, 'Nenhum agendamento pendente.');
+
+      renderList('list-quotes', quotes, (item) => `
+        <div class="queue-card" style="padding:14px; border-radius:18px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.025); box-shadow:none;">
+          <strong>${item.payload?.cliente || 'Cliente sem nome'}</strong>
+          <span class="queue-meta">Criado em ${formatDateTime(item.created_at)}</span>
+          <span class="queue-meta">Servico: ${item.payload?.servico || '-'} | Modelo: ${item.payload?.modelo || '-'}</span>
+        </div>
+      `, 'Nenhum orcamento pendente.');
+    }
+
+    function updateLinksWithCurrentApi() {
+      const apiBase = auth.getApiBase();
+      const suffix = apiBase ? `?api=${encodeURIComponent(apiBase)}` : '';
+      document.getElementById('link-clients').href = `clients.html${suffix}`;
+      document.getElementById('link-schedules').href = `agendamentos.html${suffix}`;
+      document.getElementById('link-quotes').href = `app.html${suffix}`;
+      document.getElementById('link-dashboard').href = `dashboard.html${suffix}`;
+      apiLine.textContent = apiBase || 'URL da API nao configurada';
+    }
+
+    async function testApi() {
+      updateLinksWithCurrentApi();
+      try {
+        await auth.apiFetch('/health');
+        setApiConnected(true, 'API conectada');
+        setFlash('API pronta para sincronizacao.', 'success');
+        return true;
+      } catch (error) {
+        setApiConnected(false, 'API desconectada');
+        setFlash(error.message, 'error');
+        return false;
+      }
+    }
+
+    async function syncQueue(key, path) {
+      const queue = readQueue(key);
+      if (!queue.length) return { synced: 0, remaining: 0 };
+
+      const remaining = [];
+      let synced = 0;
+      for (const item of queue) {
+        try {
+          await auth.apiFetch(path, { method: 'POST', body: JSON.stringify(item.payload) });
+          synced += 1;
+        } catch (error) {
+          remaining.push(item);
+        }
+      }
+
+      writeQueue(key, remaining);
+      return { synced, remaining: remaining.length };
+    }
+
+    async function syncAll() {
+      const ok = await testApi();
+      if (!ok) return;
+
+      const clientsResult = await syncQueue(CLIENTS_KEY, '/api/clients');
+      const schedulesResult = await syncQueue(SCHEDULES_KEY, '/api/schedules');
+      const quotesResult = await syncQueue(QUOTES_KEY, '/api/quote/save');
+
+      renderQueues();
+      const syncedTotal = clientsResult.synced + schedulesResult.synced + quotesResult.synced;
+      const remainingTotal = clientsResult.remaining + schedulesResult.remaining + quotesResult.remaining;
+      setFlash(`${syncedTotal} item(ns) sincronizado(s). ${remainingTotal} ainda pendente(s).`, 'success');
+    }
+
+    document.getElementById('test-api').addEventListener('click', testApi);
+    document.getElementById('sync-all').addEventListener('click', syncAll);
+    window.addEventListener('storage', () => {
+      renderQueues();
+      updateLinksWithCurrentApi();
+    });
+
+    updateLinksWithCurrentApi();
+    renderQueues();
+    testApi();
+  </script>
+</body>
+</html>
