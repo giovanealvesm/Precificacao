@@ -164,6 +164,21 @@
     .schedule-card strong, .schedule-card span { display: block; }
     .schedule-card strong { font-size: 1rem; margin-bottom: 6px; }
     .schedule-meta { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .client-shortcuts {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .client-chip {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 999px;
+      font: inherit;
+      cursor: pointer;
+    }
     .empty { color: var(--muted); padding: 14px 0; }
     @media (max-width: 980px) {
       .layout, .grid-two { grid-template-columns: 1fr; }
@@ -215,6 +230,8 @@
             <label for="cliente">Cliente</label>
             <input id="cliente" list="clientes-list" type="text" placeholder="Nome do cliente" />
             <datalist id="clientes-list"></datalist>
+            <div class="small-note">Clientes offline ou ja sincronizados aparecem logo abaixo para toque rapido.</div>
+            <div id="client-shortcuts" class="client-shortcuts"></div>
           </div>
 
           <div class="field">
@@ -293,6 +310,7 @@
     const pendingSummary = document.getElementById('pending-summary');
     const clientInput = document.getElementById('cliente');
     const clientList = document.getElementById('clientes-list');
+    const clientShortcuts = document.getElementById('client-shortcuts');
     const PENDING_CLIENTS_KEY = 'homewash.pendingClients';
     const PENDING_SCHEDULES_KEY = 'homewash.pendingSchedules';
     let cachedClients = [];
@@ -442,12 +460,29 @@
       const names = new Set();
       cachedClients.forEach((item) => names.add(String(item.nome || '').trim()));
       getPendingClients().forEach((item) => names.add(String(item.payload?.nome || '').trim()));
+      const orderedNames = Array.from(names).filter(Boolean).sort();
 
       clientList.innerHTML = '';
-      Array.from(names).filter(Boolean).sort().forEach((name) => {
+      orderedNames.forEach((name) => {
         const option = document.createElement('option');
         option.value = name;
         clientList.appendChild(option);
+      });
+
+      if (!orderedNames.length) {
+        clientShortcuts.innerHTML = '<div class="small-note">Nenhum cliente local disponivel ainda.</div>';
+        return;
+      }
+
+      clientShortcuts.innerHTML = orderedNames.map((name) => (
+        `<button type="button" class="client-chip" data-client="${encodeURIComponent(name)}">${name}</button>`
+      )).join('');
+
+      clientShortcuts.querySelectorAll('[data-client]').forEach((button) => {
+        button.addEventListener('click', () => {
+          clientInput.value = decodeURIComponent(button.dataset.client || '');
+          setFlash(`Cliente ${clientInput.value} selecionado para o agendamento.`, 'success');
+        });
       });
     }
 
@@ -628,6 +663,13 @@
     document.getElementById('horario').addEventListener('change', (event) => {
       document.getElementById('periodo').value = inferPeriodo(event.target.value);
     });
+    window.addEventListener('storage', (event) => {
+      if (event.key === PENDING_CLIENTS_KEY) {
+        renderClientSuggestions();
+      }
+    });
+    window.addEventListener('focus', renderClientSuggestions);
+    window.addEventListener('pageshow', renderClientSuggestions);
     document.getElementById('responsavel-nome').value = 'Operacao Local';
     renderClientSuggestions();
     renderPendingSchedules();
