@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home Wash Web App | Painel</title>
+  <meta name="description" content="Painel inicial do frontend estatico da Home Wash." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <script src="landing_page_config.js"></script>
+  <script src="auth_web.js"></script>
+  <style>
+    :root {
+      --surface: rgba(9, 21, 24, 0.92);
+      --surface-alt: rgba(13, 31, 36, 0.96);
+      --border: rgba(86, 173, 180, 0.32);
+      --text: #eff8f8;
+      --muted: #a4c3c7;
+      --primary: #0f9ca5;
+      --primary-strong: #12b7c2;
+      --danger: #ff6a63;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 156, 165, 0.22), transparent 38%),
+        radial-gradient(circle at bottom right, rgba(18, 183, 194, 0.18), transparent 32%),
+        linear-gradient(180deg, #061013 0%, #0b181c 100%);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .topbar, .panel, .card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface-alt) 0%, var(--surface) 100%);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+    }
+    .topbar {
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 42px; height: 42px; object-fit: contain; }
+    .brand strong { display: block; }
+    .brand span { display: block; color: var(--muted); font-size: 0.92rem; }
+    .nav-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-links a, .nav-links button {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      font: inherit;
+      cursor: pointer;
+    }
+    .hero, .grid, .recent-grid { display: grid; gap: 20px; }
+    .hero { grid-template-columns: 1.15fr 0.85fr; margin-bottom: 20px; }
+    .grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 20px; }
+    .recent-grid { grid-template-columns: 1fr 1fr; }
+    .panel, .card { padding: 22px; }
+    .eyebrow {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--primary-strong);
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .lead, .small-note { color: var(--muted); line-height: 1.6; }
+    .metric-value { font-size: 2rem; font-weight: 800; }
+    .module-links { display: grid; gap: 12px; margin-top: 18px; }
+    .module-links a {
+      display: block;
+      border-radius: 18px;
+      padding: 16px;
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.025);
+    }
+    .list { display: grid; gap: 12px; }
+    .list-item {
+      border-radius: 18px;
+      padding: 15px 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.025);
+    }
+    .list-item strong, .list-item span { display: block; }
+    .list-item span { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
+    .flash.error { color: var(--danger); }
+    .flash.success { color: #87f0b7; }
+    @media (max-width: 980px) {
+      .hero, .grid, .recent-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
+        <div>
+          <strong>Home Wash Web App</strong>
+          <span id="user-line">Carregando sessao...</span>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="app.html">Orcamentos</a>
+        <a href="clients.html">Clientes</a>
+        <a href="agendamentos.html">Agendamentos</a>
+        <button id="logout-button" type="button">Sair</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="panel">
+        <div class="eyebrow">Painel inicial</div>
+        <h1>Entrada unica para a migracao web</h1>
+        <p class="lead">Este painel consolida o estado dos modulos migrados e vira o ponto natural de entrada quando o frontend estiver publicado de forma estatica.</p>
+        <div class="module-links">
+          <a href="app.html"><strong>Orcamentos</strong><span>Calculo e historico recente com persistencia no SQLite.</span></a>
+          <a href="clients.html"><strong>Clientes</strong><span>Cadastro, listagem e exclusao basica na nova API.</span></a>
+          <a href="agendamentos.html"><strong>Agendamentos</strong><span>CRUD inicial da agenda antes da migracao de Google Calendar e notificacoes.</span></a>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Conexao</div>
+        <h2>API atual</h2>
+        <p class="small-note" id="api-line">Aguardando configuracao...</p>
+        <div class="actions" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
+          <a href="login.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Trocar login</a>
+          <a href="index.html" style="text-decoration:none; color:var(--text); padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);">Landing publica</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="eyebrow">Clientes</div>
+        <div class="metric-value" id="count-clientes">0</div>
+        <p class="small-note">Clientes cadastrados na base atual.</p>
+      </article>
+      <article class="card">
+        <div class="eyebrow">Agenda</div>
+        <div class="metric-value" id="count-agendamentos">0</div>
+        <p class="small-note">Agendamentos retornados pela API nova.</p>
+      </article>
+      <article class="card">
+        <div class="eyebrow">Historico</div>
+        <div class="metric-value" id="count-orcamentos">0</div>
+        <p class="small-note">Orcamentos recentes visiveis no painel.</p>
+      </article>
+    </section>
+
+    <section class="recent-grid">
+      <div class="panel">
+        <div class="eyebrow">Orcamentos</div>
+        <h2>Ultimos registros</h2>
+        <div id="recent-quotes" class="list"><div class="small-note">Carregando dados...</div></div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Agenda</div>
+        <h2>Proximos agendamentos</h2>
+        <div id="recent-schedules" class="list"><div class="small-note">Carregando dados...</div></div>
+      </div>
+    </section>
+
+    <div id="flash" class="flash"></div>
+  </div>
+
+  <script>
+    const auth = window.HomeWashAuth;
+    const flash = document.getElementById('flash');
+
+    function setFlash(message, type = '') {
+      flash.textContent = message || '';
+      flash.className = `flash ${type}`.trim();
+    }
+
+    function renderList(targetId, items, emptyMessage, mapper) {
+      const target = document.getElementById(targetId);
+      if (!Array.isArray(items) || !items.length) {
+        target.innerHTML = `<div class="small-note">${emptyMessage}</div>`;
+        return;
+      }
+      target.innerHTML = items.map(mapper).join('');
+    }
+
+    async function loadDashboard() {
+      try {
+        const session = await auth.requireAuth();
+        const user = (session && session.user) || auth.getStoredUser() || {};
+        document.getElementById('user-line').textContent = `${user.nome || user.login || 'Usuario'} conectado`;
+        document.getElementById('api-line').textContent = auth.getApiBase() || 'URL da API nao configurada';
+
+        const payload = await auth.apiFetch('/api/dashboard/summary');
+        const data = payload.data || {};
+        const counts = data.counts || {};
+        document.getElementById('count-clientes').textContent = counts.clientes || 0;
+        document.getElementById('count-agendamentos').textContent = counts.agendamentos || 0;
+        document.getElementById('count-orcamentos').textContent = counts.orcamentos_recentes || 0;
+
+        renderList('recent-quotes', data.recent_quotes || [], 'Nenhum orcamento recente.', (item) => `
+          <article class="list-item">
+            <strong>#${item.id} ${item.cliente || 'Cliente sem nome'}</strong>
+            <span>${item.data || '-'} | ${item.servico || '-'}</span>
+            <span>PIX: ${Number(item.total_pix || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          </article>
+        `);
+
+        renderList('recent-schedules', data.recent_schedules || [], 'Nenhum agendamento encontrado.', (item) => `
+          <article class="list-item">
+            <strong>#${item.id} ${item.cliente || 'Cliente sem nome'}</strong>
+            <span>${item.data_agendada || '-'} | ${item.horario || '-'} | ${item.periodo || '-'}</span>
+            <span>${item.responsavel_nome || 'Sem responsavel'} | ${item.servico_realizado ? 'Realizado' : 'Pendente'}</span>
+          </article>
+        `);
+
+        setFlash('Painel carregado com sucesso.', 'success');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    }
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      try {
+        await auth.logout();
+      } finally {
+        window.location.href = 'login.html';
+      }
+    });
+
+    loadDashboard();
+  </script>
+</body>
+</html>

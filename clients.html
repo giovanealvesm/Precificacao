@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home Wash Web App | Clientes</title>
+  <meta name="description" content="Cadastro e consulta de clientes da Home Wash via frontend estatico e API separada." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <script src="landing_page_config.js"></script>
+  <script src="auth_web.js"></script>
+  <style>
+    :root {
+      --surface: rgba(9, 21, 24, 0.92);
+      --surface-alt: rgba(13, 31, 36, 0.96);
+      --border: rgba(86, 173, 180, 0.32);
+      --text: #eff8f8;
+      --muted: #a4c3c7;
+      --primary: #0f9ca5;
+      --primary-strong: #12b7c2;
+      --danger: #ff6a63;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 156, 165, 0.22), transparent 38%),
+        radial-gradient(circle at bottom right, rgba(18, 183, 194, 0.18), transparent 32%),
+        linear-gradient(180deg, #061013 0%, #0b181c 100%);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .topbar, .panel, .list-card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface-alt) 0%, var(--surface) 100%);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+    }
+    .topbar {
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 42px; height: 42px; object-fit: contain; }
+    .brand strong { display: block; }
+    .brand span { display: block; color: var(--muted); font-size: 0.92rem; }
+    .nav-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 20px;
+    }
+    .panel, .list-card { padding: 22px; }
+    .eyebrow {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--primary-strong);
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .lead, .small-note { color: var(--muted); line-height: 1.6; }
+    .field { display: grid; gap: 8px; margin-top: 12px; }
+    label { font-weight: 700; font-size: 0.92rem; }
+    input, textarea {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 13px 14px;
+      font: inherit;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+    }
+    button.secondary {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    button.danger {
+      background: rgba(255, 106, 99, 0.12);
+      border: 1px solid rgba(255, 106, 99, 0.28);
+      color: #ffd5d2;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 8px 14px;
+      background: rgba(15, 156, 165, 0.14);
+      border: 1px solid rgba(18, 183, 194, 0.28);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .status-pill.offline {
+      background: rgba(255, 106, 99, 0.12);
+      border-color: rgba(255, 106, 99, 0.28);
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .client-list { display: grid; gap: 12px; }
+    .client-card {
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.025);
+    }
+    .client-card strong, .client-card span { display: block; }
+    .client-card strong { font-size: 1rem; margin-bottom: 6px; }
+    .client-meta { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
+    .flash.error { color: var(--danger); }
+    .flash.success { color: #87f0b7; }
+    .empty { color: var(--muted); padding: 14px 0; }
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
+        <div>
+          <strong>Home Wash Web App</strong>
+          <span>Modulo de clientes em frontend estatico + API</span>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html">Painel</a>
+        <a href="index.html">Landing</a>
+        <a href="app.html">Orcamentos</a>
+        <a href="clients.html">Clientes</a>
+        <a href="agendamentos.html">Agendamentos</a>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="status-pill offline" id="api-status">API desconectada</div>
+      <div class="small-note">Esta tela cobre cadastro, listagem e exclusao basica de clientes pela nova API.</div>
+    </div>
+
+    <main class="layout">
+      <section class="panel">
+        <div class="eyebrow">Cadastro</div>
+        <h1>Novo cliente</h1>
+        <p class="lead">Primeira migracao do modulo de clientes para uma interface web separada do Streamlit.</p>
+
+        <div class="field">
+          <label for="api-url">URL da API</label>
+          <input id="api-url" type="url" placeholder="https://api.seudominio.com" />
+        </div>
+        <div class="actions">
+          <button id="save-api-url" type="button" class="secondary">Salvar URL da API</button>
+          <button id="test-api" type="button" class="secondary">Testar conexao</button>
+        </div>
+
+        <div class="field">
+          <label for="nome">Nome</label>
+          <input id="nome" type="text" placeholder="Nome do cliente" />
+        </div>
+        <div class="field">
+          <label for="telefone">Telefone</label>
+          <input id="telefone" type="text" placeholder="(19) 99999-9999" />
+        </div>
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input id="email" type="email" placeholder="cliente@exemplo.com" />
+        </div>
+        <div class="field">
+          <label for="endereco">Endereco</label>
+          <input id="endereco" type="text" placeholder="Rua, numero e bairro" />
+        </div>
+        <div class="field">
+          <label for="proxima-agenda">Proxima agenda</label>
+          <input id="proxima-agenda" type="text" placeholder="Ex: 10/04/2026 14:00" />
+        </div>
+        <div class="field">
+          <label for="criado-por">Criado por</label>
+          <input id="criado-por" type="text" placeholder="Usuario responsavel" />
+        </div>
+        <div class="field">
+          <label for="notas">Notas</label>
+          <textarea id="notas" placeholder="Observacoes do cliente"></textarea>
+        </div>
+
+        <div class="actions">
+          <button id="save-client" type="button">Salvar cliente</button>
+          <button id="reset-form" type="button" class="secondary">Limpar formulario</button>
+        </div>
+        <div id="flash" class="flash"></div>
+      </section>
+
+      <section class="list-card">
+        <div class="eyebrow">Base atual</div>
+        <h2>Clientes cadastrados</h2>
+        <div class="actions" style="margin-top: 10px;">
+          <button id="refresh-clients" type="button" class="secondary">Atualizar lista</button>
+        </div>
+        <div id="client-list" class="client-list">
+          <div class="empty">Nenhum cliente carregado ainda.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const auth = window.HomeWashAuth;
+    const apiInput = document.getElementById('api-url');
+    const apiStatus = document.getElementById('api-status');
+    const flash = document.getElementById('flash');
+    const clientList = document.getElementById('client-list');
+    let cachedClients = [];
+
+    function normalizeBaseUrl(url) {
+      return auth.normalizeBaseUrl(url);
+    }
+
+    function getDefaultApiUrl() {
+      return auth.getApiBase();
+    }
+
+    function setFlash(message, type = '') {
+      flash.textContent = message || '';
+      flash.className = `flash ${type}`.trim();
+    }
+
+    function setApiStatus(ok, label) {
+      apiStatus.textContent = label;
+      apiStatus.classList.toggle('offline', !ok);
+    }
+
+    async function apiFetch(path, options = {}) {
+      auth.saveApiInput(apiInput);
+      return auth.apiFetch(path, options);
+    }
+
+    function currentClientPayload() {
+      return {
+        nome: document.getElementById('nome').value.trim(),
+        telefone: document.getElementById('telefone').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        endereco: document.getElementById('endereco').value.trim(),
+        proxima_agenda: document.getElementById('proxima-agenda').value.trim(),
+        criado_por: document.getElementById('criado-por').value.trim(),
+        notas: document.getElementById('notas').value.trim(),
+      };
+    }
+
+    function resetForm() {
+      ['nome', 'telefone', 'email', 'endereco', 'proxima-agenda', 'criado-por', 'notas'].forEach((id) => {
+        document.getElementById(id).value = '';
+      });
+    }
+
+    function fillClientForm(nome) {
+      const client = cachedClients.find((item) => item.nome === nome);
+      if (!client) return;
+      document.getElementById('nome').value = client.nome || '';
+      document.getElementById('telefone').value = client.telefone || '';
+      document.getElementById('email').value = client.email || '';
+      document.getElementById('endereco').value = client.endereco || '';
+      document.getElementById('proxima-agenda').value = client.proxima_agenda || '';
+      document.getElementById('criado-por').value = client.criado_por || '';
+      document.getElementById('notas').value = client.notas || '';
+      setFlash(`Formulario preenchido com os dados de ${nome}.`, 'success');
+    }
+
+    function renderClients(items) {
+      if (!Array.isArray(items) || !items.length) {
+        clientList.innerHTML = '<div class="empty">Nenhum cliente cadastrado.</div>';
+        return;
+      }
+
+      clientList.innerHTML = items.map((item) => `
+        <article class="client-card">
+          <strong>${item.nome || 'Cliente sem nome'}</strong>
+          <span class="client-meta">Telefone: ${item.telefone || '-'}</span>
+          <span class="client-meta">E-mail: ${item.email || '-'}</span>
+          <span class="client-meta">Endereco: ${item.endereco || '-'}</span>
+          <span class="client-meta">Proxima agenda: ${item.proxima_agenda || '-'}</span>
+          <span class="client-meta">Criado por: ${item.criado_por || '-'}</span>
+          <span class="client-meta">Notas: ${item.notas || '-'}</span>
+          <div class="actions" style="margin-top: 12px;">
+            <button type="button" class="secondary" data-fill="${encodeURIComponent(item.nome || '')}">Editar no formulario</button>
+            <button type="button" class="danger" data-delete="${encodeURIComponent(item.nome || '')}">Excluir</button>
+          </div>
+        </article>
+      `).join('');
+
+      clientList.querySelectorAll('[data-fill]').forEach((button) => {
+        button.addEventListener('click', () => fillClientForm(decodeURIComponent(button.dataset.fill || '')));
+      });
+
+      clientList.querySelectorAll('[data-delete]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const nome = decodeURIComponent(button.dataset.delete || '');
+          if (!nome) return;
+          if (!window.confirm(`Excluir o cliente ${nome}?`)) return;
+          try {
+            await apiFetch(`/api/clients?nome=${encodeURIComponent(nome)}`, { method: 'DELETE' });
+            await loadClients();
+            setFlash(`Cliente ${nome} excluido.`, 'success');
+          } catch (error) {
+            setFlash(error.message, 'error');
+          }
+        });
+      });
+    }
+
+    async function loadClients() {
+      const payload = await apiFetch('/api/clients');
+      cachedClients = payload.data || [];
+      renderClients(cachedClients);
+    }
+
+    async function testApi() {
+      try {
+        await apiFetch('/health');
+        setApiStatus(true, 'API conectada');
+        await loadClients();
+        setFlash('API pronta para o modulo de clientes.', 'success');
+      } catch (error) {
+        setApiStatus(false, 'API desconectada');
+        renderClients([]);
+        setFlash(error.message, 'error');
+      }
+    }
+
+    async function saveClient() {
+      try {
+        const payload = currentClientPayload();
+        await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
+        await loadClients();
+        setFlash(`Cliente ${payload.nome} salvo com sucesso.`, 'success');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    }
+
+    apiInput.value = getDefaultApiUrl();
+    document.getElementById('save-api-url').addEventListener('click', () => {
+      auth.saveApiInput(apiInput);
+      setFlash('URL da API salva neste navegador.', 'success');
+    });
+    document.getElementById('test-api').addEventListener('click', testApi);
+    document.getElementById('save-client').addEventListener('click', saveClient);
+    document.getElementById('reset-form').addEventListener('click', () => {
+      resetForm();
+      setFlash('Formulario limpo.', 'success');
+    });
+    document.getElementById('refresh-clients').addEventListener('click', async () => {
+      try {
+        await loadClients();
+        setFlash('Lista de clientes atualizada.', 'success');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    });
+    auth.requireAuth().then(() => testApi()).catch((error) => {
+      if (error && error.code !== 401) {
+        setFlash(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<svg width="420" height="620" viewBox="0 0 420 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="420" height="620" rx="36" fill="#050607"/>
+  <path d="M57 182L207 52L289 123V91H322V182H279L207 107L107 182H57Z" fill="#F5F7FA"/>
+  <rect x="189" y="124" width="19" height="19" fill="#F5F7FA"/>
+  <rect x="211" y="124" width="19" height="19" fill="#F5F7FA"/>
+  <rect x="189" y="146" width="19" height="19" fill="#F5F7FA"/>
+  <rect x="211" y="146" width="19" height="19" fill="#F5F7FA"/>
+  <path d="M112 250C112 220 136 196 166 196H271C300 196 324 220 324 250V295C324 325 300 349 271 349H166C136 349 112 325 112 295V250Z" fill="#146D79"/>
+  <path d="M145 319C144 274 143 256 151 239C157 227 169 219 183 219H245C257 219 268 226 274 236C283 252 282 272 281 318H258C258 286 258 273 254 264C251 256 245 251 237 249C228 247 216 247 192 247C168 247 157 247 149 251C143 254 138 260 136 268C133 279 134 292 136 319H145Z" fill="#0B1011"/>
+  <path d="M165 267C176 267 181 254 176 245C171 236 157 238 155 249C153 258 157 267 165 267Z" fill="#D7DCE4"/>
+  <path d="M175 225L180 239L194 244L180 249L175 263L170 249L156 244L170 239L175 225Z" fill="#F5F7FA"/>
+  <path d="M88 237C111 305 165 361 248 380C285 388 318 386 345 378C315 421 270 448 217 448C121 448 50 363 50 268C50 256 51 246 54 236C62 233 74 233 88 237Z" fill="#D7DCE4"/>
+  <path d="M64 238C125 363 277 407 356 375" stroke="#0B1011" stroke-width="7" stroke-linecap="round"/>
+  <text x="210" y="514" text-anchor="middle" fill="#F5F7FA" font-size="46" font-family="Trebuchet MS, Arial, sans-serif" letter-spacing="4">HOME WASH</text>
+  <text x="210" y="565" text-anchor="middle" fill="#F5F7FA" font-size="42" font-family="Trebuchet MS, Arial, sans-serif" letter-spacing="3">SOLUTIONS</text>
+</svg>
