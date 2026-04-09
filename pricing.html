@@ -140,6 +140,15 @@
       padding: 12px 14px;
       font: inherit;
     }
+    .field select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+    }
     .field input[disabled] {
       opacity: 0.7;
     }
@@ -203,6 +212,24 @@
       color: var(--muted);
       line-height: 1.5;
       margin-top: 6px;
+    }
+    .history-item .changes {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .history-item .change-line {
+      color: var(--text);
+      font-size: 0.92rem;
+    }
+    .history-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .history-restore {
+      background: rgba(255,255,255,0.06);
     }
     .hidden { display: none; }
     @media (max-width: 1100px) {
@@ -269,6 +296,10 @@
           <button id="reload-button" type="button">Recarregar da API</button>
           <button id="restore-button" type="button">Restaurar padrao</button>
           <button id="save-button" type="button" class="primary">Salvar precificacao</button>
+        </div>
+        <div class="field">
+          <label for="confirm-password">Senha do administrador para confirmar alteracoes</label>
+          <input id="confirm-password" type="password" placeholder="Digite a senha atual antes de salvar ou restaurar" />
         </div>
         <div id="dirty-note" class="status-note">Tudo salvo na API.</div>
         <div id="flash" class="flash"></div>
@@ -516,6 +547,7 @@
     const supportShell = document.getElementById('support-shell');
     const accessPanel = document.getElementById('access-panel');
     const dirtyNote = document.getElementById('dirty-note');
+    const confirmPasswordInput = document.getElementById('confirm-password');
     const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
     let pricingDefaults = null;
     let pricingCurrent = null;
@@ -637,16 +669,106 @@
         preview.historyList.innerHTML = '<div class="history-item"><strong>Nenhuma alteracao salva ainda.</strong></div>';
         return;
       }
+
+      function extractTrackedValues(config) {
+        const pricing = config || {};
+        const services = pricing.servicos || {};
+        const sofaFaixas = (services.sofa || {}).faixas || [];
+        const poltrona = (services.poltrona || {}).modelos || {};
+        const cadeira = (services.cadeira || {}).modelos || {};
+        const colchao = (services.colchao || {}).modelos || {};
+        const extras = (pricing.extras || {}).poltrona_amamentacao || {};
+        return {
+          cartao: Number((pricing.percentuais || {}).cartao || 0),
+          retratilPercentual: Number((pricing.percentuais || {}).sofa_retratil || 0),
+          sujidade1: Number((pricing.multiplicadores_sujidade || {})['1'] || 1),
+          sujidade2: Number((pricing.multiplicadores_sujidade || {})['2'] || 1),
+          sujidade3: Number((pricing.multiplicadores_sujidade || {})['3'] || 1),
+          sofaPermiteRetratil: Boolean((services.sofa || {}).usa_retratil),
+          poltronaPermiteRetratil: Boolean((services.poltrona || {}).usa_retratil),
+          cadeiraPermiteRetratil: Boolean((services.cadeira || {}).usa_retratil),
+          colchaoPermiteRetratil: Boolean((services.colchao || {}).usa_retratil),
+          sofaFaixa1: Number((sofaFaixas[0] || {}).base_pix || 0),
+          sofaFaixa2: Number((sofaFaixas[1] || {}).base_pix || 0),
+          poltronaSlim: Number((poltrona.slim_decorativa || {}).base_pix || 0),
+          cadeiraAssento: Number((cadeira.assento || {}).base_pix || 0),
+          colchaoQueen: Number((colchao.casal_queen || {}).base_pix || 0),
+          amamentacaoEncosto: Number(extras.encosto_alto_adicional_pix || 0),
+        };
+      }
+
+      function formatDiffValue(key, value) {
+        if (/PermiteRetratil$/.test(key)) {
+          return value ? 'Sim' : 'Nao';
+        }
+        if (/sujidade/.test(key)) {
+          return `${Number(value || 0).toFixed(2)}x`;
+        }
+        if (/cartao|retratilPercentual/.test(key)) {
+          return `${Number(value || 0).toFixed(1)}%`;
+        }
+        return formatCurrency(value || 0);
+      }
+
+      const labels = {
+        cartao: 'Taxa do cartao',
+        retratilPercentual: 'Taxa de retratil',
+        sujidade1: 'Sujidade nivel 1',
+        sujidade2: 'Sujidade nivel 2',
+        sujidade3: 'Sujidade nivel 3',
+        sofaPermiteRetratil: 'Sofa aceita retratil',
+        poltronaPermiteRetratil: 'Poltrona aceita retratil',
+        cadeiraPermiteRetratil: 'Cadeira aceita retratil',
+        colchaoPermiteRetratil: 'Colchao aceita retratil',
+        sofaFaixa1: 'Sofa faixa 1',
+        sofaFaixa2: 'Sofa faixa 2',
+        poltronaSlim: 'Poltrona slim',
+        cadeiraAssento: 'Cadeira assento',
+        colchaoQueen: 'Colchao queen',
+        amamentacaoEncosto: 'Adicional encosto alto',
+      };
+
       preview.historyList.innerHTML = items.map((item) => {
         const resumo = item.resumo || {};
+        const before = extractTrackedValues(item.anterior || {});
+        const after = extractTrackedValues(item.atual || {});
+        const changes = Object.keys(labels)
+          .filter((key) => before[key] !== after[key])
+          .map((key) => `${labels[key]}: ${formatDiffValue(key, before[key])} -> ${formatDiffValue(key, after[key])}`)
+          .slice(0, 6);
+        const actionLabel = item.action === 'restore' ? 'Restauracao' : 'Salvamento';
         return `
           <article class="history-item">
-            <strong>${formatHistoryDate(item.timestamp)} | ${item.usuario || 'admin'}</strong>
+            <strong>${formatHistoryDate(item.timestamp)} | ${item.usuario || 'admin'} | ${actionLabel}</strong>
             <span>Cartao: ${Number(resumo.cartao || 0).toFixed(1)}% | Retratil: ${Number(resumo.retratil || 0).toFixed(1)}%</span>
             <span>Sujidade 2: ${Number(resumo.sujidade_2 || 1).toFixed(2)}x | Sofa 190 cm: ${formatCurrency(resumo.sofa_190 || 0)}</span>
+            <div class="changes">${changes.length ? changes.map((line) => `<span class="change-line">${line}</span>`).join('') : '<span class="change-line">Nenhuma diferenca resumida encontrada.</span>'}</div>
+            <div class="history-actions">
+              <button type="button" class="history-restore" data-history-timestamp="${item.timestamp}">Restaurar esta versao</button>
+            </div>
           </article>
         `;
       }).join('');
+
+      preview.historyList.querySelectorAll('[data-history-timestamp]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const timestamp = button.getAttribute('data-history-timestamp');
+          const selected = pricingHistory.find((entry) => entry.timestamp === timestamp);
+          if (!selected || !selected.atual) {
+            setFlash('Versao historica nao encontrada.', 'error');
+            return;
+          }
+          try {
+            await savePricing(selected.atual, {
+              action: 'restore',
+              sourceTimestamp: selected.timestamp,
+              successMessage: 'Versao historica restaurada com sucesso.',
+            });
+          } catch (error) {
+            setFlash(error.message, 'error');
+          }
+        });
+      });
     }
 
     function populatePreviewOptions() {
@@ -881,11 +1003,20 @@
       setFlash('Precificacao carregada da API.', 'success');
     }
 
-    async function savePricing() {
-      const pricing = collectPricing();
+    async function savePricing(pricingOverride = null, options = {}) {
+      const senhaConfirmacao = String(confirmPasswordInput.value || '');
+      if (!senhaConfirmacao) {
+        throw new Error('Informe a senha do administrador para confirmar a alteracao.');
+      }
+      const pricing = pricingOverride || collectPricing();
       const payload = await auth.apiFetch('/api/admin/pricing', {
         method: 'PUT',
-        body: JSON.stringify({ pricing }),
+        body: JSON.stringify({
+          pricing,
+          senha_confirmacao: senhaConfirmacao,
+          action: options.action || 'save',
+          source_timestamp: options.sourceTimestamp || '',
+        }),
       });
       pricingCurrent = (payload.data && payload.data.pricing) || pricing;
       pricingHistory = (payload.data && payload.data.history) || pricingHistory;
@@ -893,7 +1024,7 @@
       renderHistory(pricingHistory);
       lastSavedSnapshot = stableStringify(collectPricing());
       setDirtyState(false);
-      setFlash('Precificacao salva com sucesso.', 'success');
+      setFlash(options.successMessage || 'Precificacao salva com sucesso.', 'success');
     }
 
     document.getElementById('reload-button').addEventListener('click', async () => {
