@@ -533,6 +533,21 @@
         <div class="eyebrow">Historico</div>
         <h3>Ultimas alteracoes salvas</h3>
         <p class="small-note">Historico simples das mudanças de precificação gravadas pela API.</p>
+        <div class="section-grid" style="margin-top:16px;">
+          <div class="field">
+            <label for="history-search">Buscar no historico</label>
+            <input id="history-search" type="text" placeholder="Busque por usuario, data, acao ou mudanca" />
+          </div>
+          <div class="field">
+            <label for="history-action-filter">Filtrar por acao</label>
+            <select id="history-action-filter">
+              <option value="all">Todas</option>
+              <option value="save">Somente salvamentos</option>
+              <option value="restore">Somente restauracoes</option>
+            </select>
+          </div>
+        </div>
+        <p id="history-count" class="small-note">Mostrando todas as entradas.</p>
         <div id="history-list" class="history-list">
           <div class="history-item"><strong>Nenhuma alteracao salva ainda.</strong></div>
         </div>
@@ -611,6 +626,9 @@
       base: document.getElementById('preview-base'),
       meta: document.getElementById('preview-meta'),
       historyList: document.getElementById('history-list'),
+      historySearch: document.getElementById('history-search'),
+      historyActionFilter: document.getElementById('history-action-filter'),
+      historyCount: document.getElementById('history-count'),
     };
 
     function setFlash(message, type = '') {
@@ -623,7 +641,20 @@
     }
 
     function stableStringify(value) {
-      return JSON.stringify(value);
+      function normalize(input) {
+        if (Array.isArray(input)) {
+          return input.map(normalize);
+        }
+        if (input && typeof input === 'object') {
+          return Object.keys(input).sort().reduce((accumulator, key) => {
+            accumulator[key] = normalize(input[key]);
+            return accumulator;
+          }, {});
+        }
+        return input;
+      }
+
+      return JSON.stringify(normalize(value));
     }
 
     function toNumber(value, fallback = 0) {
@@ -664,87 +695,147 @@
       return date.toLocaleString('pt-BR');
     }
 
+    function extractTrackedValues(config) {
+      const pricing = config || {};
+      const services = pricing.servicos || {};
+      const sofaFaixas = (services.sofa || {}).faixas || [];
+      const poltrona = (services.poltrona || {}).modelos || {};
+      const cadeira = (services.cadeira || {}).modelos || {};
+      const colchao = (services.colchao || {}).modelos || {};
+      const extras = (pricing.extras || {}).poltrona_amamentacao || {};
+      return {
+        cartao: Number((pricing.percentuais || {}).cartao || 0),
+        retratilPercentual: Number((pricing.percentuais || {}).sofa_retratil || 0),
+        sujidade1: Number((pricing.multiplicadores_sujidade || {})['1'] || 1),
+        sujidade2: Number((pricing.multiplicadores_sujidade || {})['2'] || 1),
+        sujidade3: Number((pricing.multiplicadores_sujidade || {})['3'] || 1),
+        sofaPermiteRetratil: Boolean((services.sofa || {}).usa_retratil),
+        poltronaPermiteRetratil: Boolean((services.poltrona || {}).usa_retratil),
+        cadeiraPermiteRetratil: Boolean((services.cadeira || {}).usa_retratil),
+        colchaoPermiteRetratil: Boolean((services.colchao || {}).usa_retratil),
+        sofaFaixa1: Number((sofaFaixas[0] || {}).base_pix || 0),
+        sofaFaixa2: Number((sofaFaixas[1] || {}).base_pix || 0),
+        poltronaSlim: Number((poltrona.slim_decorativa || {}).base_pix || 0),
+        cadeiraAssento: Number((cadeira.assento || {}).base_pix || 0),
+        colchaoQueen: Number((colchao.casal_queen || {}).base_pix || 0),
+        amamentacaoEncosto: Number(extras.encosto_alto_adicional_pix || 0),
+      };
+    }
+
+    function formatDiffValue(key, value) {
+      if (/PermiteRetratil$/.test(key)) {
+        return value ? 'Sim' : 'Nao';
+      }
+      if (/sujidade/.test(key)) {
+        return `${Number(value || 0).toFixed(2)}x`;
+      }
+      if (/cartao|retratilPercentual/.test(key)) {
+        return `${Number(value || 0).toFixed(1)}%`;
+      }
+      return formatCurrency(value || 0);
+    }
+
+    const historyLabels = {
+      cartao: 'Taxa do cartao',
+      retratilPercentual: 'Taxa de retratil',
+      sujidade1: 'Sujidade nivel 1',
+      sujidade2: 'Sujidade nivel 2',
+      sujidade3: 'Sujidade nivel 3',
+      sofaPermiteRetratil: 'Sofa aceita retratil',
+      poltronaPermiteRetratil: 'Poltrona aceita retratil',
+      cadeiraPermiteRetratil: 'Cadeira aceita retratil',
+      colchaoPermiteRetratil: 'Colchao aceita retratil',
+      sofaFaixa1: 'Sofa faixa 1',
+      sofaFaixa2: 'Sofa faixa 2',
+      poltronaSlim: 'Poltrona slim',
+      cadeiraAssento: 'Cadeira assento',
+      colchaoQueen: 'Colchao queen',
+      amamentacaoEncosto: 'Adicional encosto alto',
+    };
+
+    function buildHistoryChanges(item) {
+      const before = extractTrackedValues(item.anterior || {});
+      const after = extractTrackedValues(item.atual || {});
+      return Object.keys(historyLabels)
+        .filter((key) => before[key] !== after[key])
+        .map((key) => `${historyLabels[key]}: ${formatDiffValue(key, before[key])} -> ${formatDiffValue(key, after[key])}`);
+    }
+
+    function getSourceEntry(item) {
+      if (!item || !item.source_timestamp) {
+        return null;
+      }
+      return pricingHistory.find((entry) => entry.timestamp === item.source_timestamp) || null;
+    }
+
+    function getHistoryFilterState() {
+      return {
+        search: String(preview.historySearch.value || '').trim().toLowerCase(),
+        action: String(preview.historyActionFilter.value || 'all'),
+      };
+    }
+
+    function getFilteredHistory(items) {
+      const { search, action } = getHistoryFilterState();
+      return (Array.isArray(items) ? items : []).filter((item) => {
+        if (action !== 'all' && item.action !== action) {
+          return false;
+        }
+        if (!search) {
+          return true;
+        }
+        const sourceEntry = getSourceEntry(item);
+        const haystack = [
+          item.usuario,
+          item.action,
+          item.timestamp,
+          item.source_usuario,
+          item.source_action,
+          item.source_timestamp,
+          sourceEntry && sourceEntry.usuario,
+          ...buildHistoryChanges(item),
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(search);
+      });
+    }
+
     function renderHistory(items) {
+      const filteredItems = getFilteredHistory(items);
+
       if (!Array.isArray(items) || !items.length) {
+        preview.historyCount.textContent = 'Nenhuma entrada encontrada.';
         preview.historyList.innerHTML = '<div class="history-item"><strong>Nenhuma alteracao salva ainda.</strong></div>';
         return;
       }
-
-      function extractTrackedValues(config) {
-        const pricing = config || {};
-        const services = pricing.servicos || {};
-        const sofaFaixas = (services.sofa || {}).faixas || [];
-        const poltrona = (services.poltrona || {}).modelos || {};
-        const cadeira = (services.cadeira || {}).modelos || {};
-        const colchao = (services.colchao || {}).modelos || {};
-        const extras = (pricing.extras || {}).poltrona_amamentacao || {};
-        return {
-          cartao: Number((pricing.percentuais || {}).cartao || 0),
-          retratilPercentual: Number((pricing.percentuais || {}).sofa_retratil || 0),
-          sujidade1: Number((pricing.multiplicadores_sujidade || {})['1'] || 1),
-          sujidade2: Number((pricing.multiplicadores_sujidade || {})['2'] || 1),
-          sujidade3: Number((pricing.multiplicadores_sujidade || {})['3'] || 1),
-          sofaPermiteRetratil: Boolean((services.sofa || {}).usa_retratil),
-          poltronaPermiteRetratil: Boolean((services.poltrona || {}).usa_retratil),
-          cadeiraPermiteRetratil: Boolean((services.cadeira || {}).usa_retratil),
-          colchaoPermiteRetratil: Boolean((services.colchao || {}).usa_retratil),
-          sofaFaixa1: Number((sofaFaixas[0] || {}).base_pix || 0),
-          sofaFaixa2: Number((sofaFaixas[1] || {}).base_pix || 0),
-          poltronaSlim: Number((poltrona.slim_decorativa || {}).base_pix || 0),
-          cadeiraAssento: Number((cadeira.assento || {}).base_pix || 0),
-          colchaoQueen: Number((colchao.casal_queen || {}).base_pix || 0),
-          amamentacaoEncosto: Number(extras.encosto_alto_adicional_pix || 0),
-        };
+      if (!filteredItems.length) {
+        preview.historyCount.textContent = `Nenhuma entrada corresponde ao filtro atual. Total salvo: ${items.length}.`;
+        preview.historyList.innerHTML = '<div class="history-item"><strong>Nenhuma entrada corresponde ao filtro informado.</strong></div>';
+        return;
       }
 
-      function formatDiffValue(key, value) {
-        if (/PermiteRetratil$/.test(key)) {
-          return value ? 'Sim' : 'Nao';
-        }
-        if (/sujidade/.test(key)) {
-          return `${Number(value || 0).toFixed(2)}x`;
-        }
-        if (/cartao|retratilPercentual/.test(key)) {
-          return `${Number(value || 0).toFixed(1)}%`;
-        }
-        return formatCurrency(value || 0);
-      }
+      preview.historyCount.textContent = `Mostrando ${filteredItems.length} de ${items.length} entradas.`;
 
-      const labels = {
-        cartao: 'Taxa do cartao',
-        retratilPercentual: 'Taxa de retratil',
-        sujidade1: 'Sujidade nivel 1',
-        sujidade2: 'Sujidade nivel 2',
-        sujidade3: 'Sujidade nivel 3',
-        sofaPermiteRetratil: 'Sofa aceita retratil',
-        poltronaPermiteRetratil: 'Poltrona aceita retratil',
-        cadeiraPermiteRetratil: 'Cadeira aceita retratil',
-        colchaoPermiteRetratil: 'Colchao aceita retratil',
-        sofaFaixa1: 'Sofa faixa 1',
-        sofaFaixa2: 'Sofa faixa 2',
-        poltronaSlim: 'Poltrona slim',
-        cadeiraAssento: 'Cadeira assento',
-        colchaoQueen: 'Colchao queen',
-        amamentacaoEncosto: 'Adicional encosto alto',
-      };
-
-      preview.historyList.innerHTML = items.map((item) => {
+      preview.historyList.innerHTML = filteredItems.map((item) => {
         const resumo = item.resumo || {};
-        const before = extractTrackedValues(item.anterior || {});
-        const after = extractTrackedValues(item.atual || {});
-        const changes = Object.keys(labels)
-          .filter((key) => before[key] !== after[key])
-          .map((key) => `${labels[key]}: ${formatDiffValue(key, before[key])} -> ${formatDiffValue(key, after[key])}`)
-          .slice(0, 6);
+        const changes = buildHistoryChanges(item).slice(0, 6);
         const actionLabel = item.action === 'restore' ? 'Restauracao' : 'Salvamento';
+        const sourceEntry = getSourceEntry(item);
+        const sourceDate = formatHistoryDate(item.source_timestamp || (sourceEntry && sourceEntry.timestamp) || '');
+        const sourceUser = item.source_usuario || (sourceEntry && sourceEntry.usuario) || 'admin';
+        const sourceAction = item.source_action || (sourceEntry && sourceEntry.action) || 'save';
+        const isCurrentVersion = stableStringify(item.atual || {}) === stableStringify(pricingCurrent || {});
+        const restoreDetail = item.action === 'restore' && item.source_timestamp
+          ? `<span>Restaurado por ${item.usuario || 'admin'} a partir da versao de ${sourceDate} criada por ${sourceUser} (${sourceAction === 'restore' ? 'restauracao' : 'salvamento'}).</span>`
+          : '';
         return `
           <article class="history-item">
             <strong>${formatHistoryDate(item.timestamp)} | ${item.usuario || 'admin'} | ${actionLabel}</strong>
             <span>Cartao: ${Number(resumo.cartao || 0).toFixed(1)}% | Retratil: ${Number(resumo.retratil || 0).toFixed(1)}%</span>
             <span>Sujidade 2: ${Number(resumo.sujidade_2 || 1).toFixed(2)}x | Sofa 190 cm: ${formatCurrency(resumo.sofa_190 || 0)}</span>
+            ${restoreDetail}
             <div class="changes">${changes.length ? changes.map((line) => `<span class="change-line">${line}</span>`).join('') : '<span class="change-line">Nenhuma diferenca resumida encontrada.</span>'}</div>
             <div class="history-actions">
-              <button type="button" class="history-restore" data-history-timestamp="${item.timestamp}">Restaurar esta versao</button>
+              <button type="button" class="history-restore" data-history-timestamp="${item.timestamp}" ${isCurrentVersion ? 'disabled' : ''}>${isCurrentVersion ? 'Versao atual' : 'Restaurar esta versao'}</button>
             </div>
           </article>
         `;
@@ -756,6 +847,10 @@
           const selected = pricingHistory.find((entry) => entry.timestamp === timestamp);
           if (!selected || !selected.atual) {
             setFlash('Versao historica nao encontrada.', 'error');
+            return;
+          }
+          if (stableStringify(selected.atual || {}) === stableStringify(pricingCurrent || {})) {
+            setFlash('A versao escolhida ja corresponde a precificacao atual.', 'error');
             return;
           }
           try {
@@ -1056,6 +1151,11 @@
     document.getElementById('logout-button').addEventListener('click', async () => {
       await auth.logout();
       window.location.href = auth.buildLoginUrl('pricing.html');
+    });
+
+    [preview.historySearch, preview.historyActionFilter].forEach((field) => {
+      field.addEventListener('input', () => renderHistory(pricingHistory));
+      field.addEventListener('change', () => renderHistory(pricingHistory));
     });
 
     Object.values(fields).forEach((field) => {
