@@ -18,6 +18,17 @@
     return `https://${clean}`;
   }
 
+  function normalizeFetchError(error, fallbackMessage) {
+    const message = String((error && error.message) || '').trim();
+    if (!message) {
+      return new Error(fallbackMessage);
+    }
+    if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
+      return new Error('Falha ao conectar com a API. Verifique a URL configurada e se o tunnel da API ainda esta ativo.');
+    }
+    return new Error(message);
+  }
+
   function getApiUrlFromQuery() {
     const params = new URLSearchParams(window.location.search);
     const queryValue = params.get('api') || params.get('apiUrl') || params.get('api_url') || '';
@@ -184,7 +195,12 @@
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${base}${path}`, { ...options, headers });
+    let response;
+    try {
+      response = await fetch(`${base}${path}`, { ...options, headers });
+    } catch (error) {
+      throw normalizeFetchError(error, 'Falha ao conectar com a API.');
+    }
     const payload = await response.json().catch(() => ({}));
 
     if (response.status === 401) {
@@ -236,11 +252,16 @@
       throw new Error('Informe a URL da API antes de fazer login.');
     }
 
-    const response = await fetch(`${base}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usuario, senha }),
-    });
+    let response;
+    try {
+      response = await fetch(`${base}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, senha }),
+      });
+    } catch (error) {
+      throw normalizeFetchError(error, 'Falha ao fazer login.');
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) {
       throw new Error(data.error || 'Falha ao fazer login.');
@@ -255,11 +276,16 @@
       throw new Error('Informe a URL da API antes de criar o acesso.');
     }
 
-    const response = await fetch(`${base}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {}),
-    });
+    let response;
+    try {
+      response = await fetch(`${base}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+      });
+    } catch (error) {
+      throw normalizeFetchError(error, 'Falha ao criar o acesso.');
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) {
       throw new Error(data.error || 'Falha ao criar o acesso.');
