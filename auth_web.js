@@ -266,8 +266,9 @@
     if (!response.ok || data.ok === false) {
       throw new Error(data.error || 'Falha ao fazer login.');
     }
-    setSession(data);
-    return data;
+    const sessionPayload = data && data.data ? data.data : data;
+    setSession(sessionPayload);
+    return sessionPayload;
   }
 
   async function register(payload) {
@@ -290,8 +291,9 @@
     if (!response.ok || data.ok === false) {
       throw new Error(data.error || 'Falha ao criar o acesso.');
     }
-    setSession(data);
-    return data;
+    const sessionPayload = data && data.data ? data.data : data;
+    setSession(sessionPayload);
+    return sessionPayload;
   }
 
   async function logout() {
