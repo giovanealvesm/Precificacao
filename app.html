@@ -775,9 +775,6 @@
             break;
           }
         }
-        if (payload.retratil) {
-          basePix *= 1 + (Number(pricing.percentuais?.sofa_retratil || 0) / 100);
-        }
       } else {
         const models = config.modelos || {};
         let selectedModel = String(payload.modelo || '').trim().toLowerCase();
@@ -794,6 +791,10 @@
           if (extras.encosto_alto) basePix += Number(extrasConfig.encosto_alto_adicional_pix || 10.0);
           if (extras.tem_braco) basePix += Number(extrasConfig.braco_adicional_pix || 8.0);
         }
+      }
+
+      if (config.usa_retratil && payload.retratil) {
+        basePix *= 1 + (Number(pricing.percentuais?.sofa_retratil || 0) / 100);
       }
 
       const sujidade = Number(payload.sujidade || 1);
@@ -1286,11 +1287,13 @@
         modelSelect.appendChild(option);
       }
 
+      const serviceConfig = services[servico] || {};
+      const usesRetratil = Boolean(serviceConfig.usa_retratil);
       const isSofa = servico === 'sofa';
       larguraField.style.display = isSofa ? 'grid' : 'none';
-      retratilField.style.display = isSofa ? 'grid' : 'none';
-      retratilInput.disabled = !isSofa;
-      if (!isSofa) retratilInput.checked = false;
+      retratilField.style.display = usesRetratil ? 'grid' : 'none';
+      retratilInput.disabled = !usesRetratil;
+      if (!usesRetratil) retratilInput.checked = false;
       updateSpecialFields();
     }
 
