@@ -3,7 +3,7 @@
   const SESSION_KEY = 'homewash.authSession';
   const USER_KEY = 'homewash.authUser';
   const KNOWN_CLIENTS_KEY = 'homewash.knownClients';
-  const PROTECTED_PAGES = new Set(['dashboard.html', 'agendamentos.html', 'sync.html']);
+  const PROTECTED_PAGES = new Set(['dashboard.html', 'agendamentos.html', 'sync.html', 'pricing.html']);
   const DEFAULT_USER = {
     login: 'operacao-local',
     nome: 'Sessao nao iniciada',

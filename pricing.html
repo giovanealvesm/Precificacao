@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home Wash Web App | Precificacao</title>
+  <meta name="description" content="Administracao web da precificacao da Home Wash." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <script src="landing_page_config.js"></script>
+  <script src="auth_web.js"></script>
+  <style>
+    :root {
+      --surface: rgba(9, 21, 24, 0.92);
+      --surface-alt: rgba(13, 31, 36, 0.96);
+      --surface-soft: rgba(255, 255, 255, 0.03);
+      --border: rgba(86, 173, 180, 0.32);
+      --text: #eff8f8;
+      --muted: #a4c3c7;
+      --primary: #0f9ca5;
+      --primary-strong: #12b7c2;
+      --accent: #87f0b7;
+      --danger: #ff6a63;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 156, 165, 0.22), transparent 38%),
+        radial-gradient(circle at bottom right, rgba(18, 183, 194, 0.18), transparent 32%),
+        linear-gradient(180deg, #061013 0%, #0b181c 100%);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1260px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .topbar, .panel, .summary-card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface-alt) 0%, var(--surface) 100%);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+    }
+    .topbar {
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 42px; height: 42px; object-fit: contain; }
+    .brand strong { display: block; }
+    .brand span { display: block; color: var(--muted); font-size: 0.92rem; }
+    .nav-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-links a, .nav-links button, button {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      font: inherit;
+      cursor: pointer;
+    }
+    button.primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+      border: 0;
+      color: white;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .panel {
+      padding: 22px;
+    }
+    .eyebrow {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--primary-strong);
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    .lead, .small-note, .helper { color: var(--muted); line-height: 1.6; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .summary-card {
+      padding: 16px;
+    }
+    .summary-card strong {
+      display: block;
+      font-size: 1.6rem;
+      margin-top: 8px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .section-grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .panel h3 {
+      margin-bottom: 8px;
+    }
+    .field {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .field label {
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .field input {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+    }
+    .field input[disabled] {
+      opacity: 0.7;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+    }
+    .toggle input {
+      width: 18px;
+      height: 18px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .flash { min-height: 24px; margin-top: 18px; font-weight: 600; }
+    .flash.error { color: var(--danger); }
+    .flash.success { color: var(--accent); }
+    .hidden { display: none; }
+    @media (max-width: 1100px) {
+      .hero, .form-grid, .summary-grid { grid-template-columns: 1fr; }
+      .section-grid, .section-grid.cols-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .shell { width: min(100%, calc(100% - 20px)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <img src="assets/logo_symbol_clean.png" alt="Home Wash" />
+        <div>
+          <strong>Home Wash Web App</strong>
+          <span id="user-line">Administracao de precificacao</span>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html">Painel</a>
+        <a href="app.html">Orcamentos</a>
+        <a href="clients.html">Clientes</a>
+        <a href="agendamentos.html">Agendamentos</a>
+        <a href="sync.html">Sincronizacao</a>
+        <button id="logout-button" type="button">Sair</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <article class="panel">
+        <div class="eyebrow">Precificacao</div>
+        <h1>Edite bases, taxas e regras do calculo direto na web.</h1>
+        <p class="lead">Esta tela atualiza a mesma configuracao central usada pelo CRM, pela API e pelo orcamento web. Somente o administrador pode salvar alteracoes.</p>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span>Cartao</span>
+            <strong id="summary-cartao">0%</strong>
+          </div>
+          <div class="summary-card">
+            <span>Retratil</span>
+            <strong id="summary-retratil">0%</strong>
+          </div>
+          <div class="summary-card">
+            <span>Sujidade 2</span>
+            <strong id="summary-sujidade-2">1.00x</strong>
+          </div>
+          <div class="summary-card">
+            <span>Sofa ate 190 cm</span>
+            <strong id="summary-sofa-faixa">R$ 0,00</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="eyebrow">Status</div>
+        <h2>Controle administrativo</h2>
+        <p class="small-note" id="api-line">Aguardando sessao...</p>
+        <p class="helper">Use Recarregar para buscar a configuracao atual da API. Use Restaurar padrao para voltar ao baseline do sistema e salvar de novo.</p>
+        <div class="actions">
+          <button id="reload-button" type="button">Recarregar da API</button>
+          <button id="restore-button" type="button">Restaurar padrao</button>
+          <button id="save-button" type="button" class="primary">Salvar precificacao</button>
+        </div>
+        <div id="flash" class="flash"></div>
+      </article>
+    </section>
+
+    <div id="access-panel" class="panel hidden">
+      <div class="eyebrow">Acesso negado</div>
+      <h2>Somente o administrador pode editar a precificacao.</h2>
+      <p class="small-note">A sessao atual nao possui permissao de administrador.</p>
+    </div>
+
+    <div id="form-shell" class="form-grid hidden">
+      <section class="panel">
+        <div class="eyebrow">Taxas</div>
+        <h3>Percentuais e multiplicadores</h3>
+        <div class="section-grid">
+          <div class="field">
+            <label for="pct-cartao">Acrescimo do cartao (%)</label>
+            <input id="pct-cartao" type="number" min="0" step="0.5" />
+          </div>
+          <div class="field">
+            <label for="pct-retratil">Acrescimo retratil (%)</label>
+            <input id="pct-retratil" type="number" min="0" step="0.5" />
+          </div>
+          <div class="field">
+            <label for="sujidade-1">Sujidade nivel 1</label>
+            <input id="sujidade-1" type="number" min="0" step="0.05" />
+          </div>
+          <div class="field">
+            <label for="sujidade-2">Sujidade nivel 2</label>
+            <input id="sujidade-2" type="number" min="0" step="0.05" />
+          </div>
+          <div class="field">
+            <label for="sujidade-3">Sujidade nivel 3</label>
+            <input id="sujidade-3" type="number" min="0" step="0.05" />
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px;">Retratil</div>
+        <h3>Servicos que aceitam adicional</h3>
+        <div class="section-grid">
+          <label class="toggle"><input id="use-retratil-sofa" type="checkbox" /> <span>Sofa aceita retratil</span></label>
+          <label class="toggle"><input id="use-retratil-poltrona" type="checkbox" /> <span>Poltrona aceita retratil</span></label>
+          <label class="toggle"><input id="use-retratil-cadeira" type="checkbox" /> <span>Cadeira aceita retratil</span></label>
+          <label class="toggle"><input id="use-retratil-colchao" type="checkbox" /> <span>Colchao aceita retratil</span></label>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px;">Sofa</div>
+        <h3>Faixas e valores base</h3>
+        <div class="section-grid">
+          <div class="field">
+            <label for="sofa-limite-1">Faixa 1 ate (cm)</label>
+            <input id="sofa-limite-1" type="number" min="1" step="5" />
+          </div>
+          <div class="field">
+            <label for="sofa-base-1">Faixa 1 PIX (R$)</label>
+            <input id="sofa-base-1" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="sofa-limite-2">Faixa 2 ate (cm)</label>
+            <input id="sofa-limite-2" type="number" min="1" step="5" />
+          </div>
+          <div class="field">
+            <label for="sofa-base-2">Faixa 2 PIX (R$)</label>
+            <input id="sofa-base-2" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="sofa-limite-3">Faixa 3 ate (cm)</label>
+            <input id="sofa-limite-3" type="number" min="1" step="5" />
+          </div>
+          <div class="field">
+            <label for="sofa-base-3">Faixa 3 PIX (R$)</label>
+            <input id="sofa-base-3" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="sofa-limite-4">Faixa 4 ate (cm)</label>
+            <input id="sofa-limite-4" type="number" min="1" step="5" />
+          </div>
+          <div class="field">
+            <label for="sofa-base-4">Faixa 4 PIX (R$)</label>
+            <input id="sofa-base-4" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="sofa-limite-5">Faixa final</label>
+            <input id="sofa-limite-5" type="text" value="Acima da faixa anterior" disabled />
+          </div>
+          <div class="field">
+            <label for="sofa-base-5">Faixa final PIX (R$)</label>
+            <input id="sofa-base-5" type="number" min="0" step="1" />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="eyebrow">Bases</div>
+        <h3>Poltrona, extras, cadeira e colchao</h3>
+        <div class="section-grid">
+          <div class="field">
+            <label for="poltrona-slim">Poltrona slim/decorativa (R$)</label>
+            <input id="poltrona-slim" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="poltrona-amamentacao">Poltrona amamentacao (R$)</label>
+            <input id="poltrona-amamentacao" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="poltrona-papa">Poltrona papai (R$)</label>
+            <input id="poltrona-papa" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="poltrona-reclinavel">Poltrona reclinavel/retratil (R$)</label>
+            <input id="poltrona-reclinavel" type="number" min="0" step="1" />
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px;">Extras amamentacao</div>
+        <div class="section-grid">
+          <div class="field">
+            <label for="amamentacao-tipo-1">Balanco tipo 1 (R$)</label>
+            <input id="amamentacao-tipo-1" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="amamentacao-tipo-2">Balanco tipo 2 (R$)</label>
+            <input id="amamentacao-tipo-2" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="amamentacao-encosto">Adicional encosto alto (R$)</label>
+            <input id="amamentacao-encosto" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="amamentacao-braco">Adicional braco (R$)</label>
+            <input id="amamentacao-braco" type="number" min="0" step="1" />
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px;">Cadeira</div>
+        <div class="section-grid">
+          <div class="field">
+            <label for="cadeira-assento">Assento estofado (R$)</label>
+            <input id="cadeira-assento" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="cadeira-assento-costas">Assento + costas (R$)</label>
+            <input id="cadeira-assento-costas" type="number" min="0" step="1" />
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px;">Colchao</div>
+        <div class="section-grid cols-3">
+          <div class="field">
+            <label for="colchao-solteiro">Solteiro padrao (R$)</label>
+            <input id="colchao-solteiro" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="colchao-solteiro-king">Solteiro king (R$)</label>
+            <input id="colchao-solteiro-king" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="colchao-casal">Casal padrao (R$)</label>
+            <input id="colchao-casal" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="colchao-queen">Casal queen (R$)</label>
+            <input id="colchao-queen" type="number" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="colchao-king">Casal king (R$)</label>
+            <input id="colchao-king" type="number" min="0" step="1" />
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const auth = window.HomeWashAuth;
+    const flash = document.getElementById('flash');
+    const formShell = document.getElementById('form-shell');
+    const accessPanel = document.getElementById('access-panel');
+    const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    let pricingDefaults = null;
+    let pricingCurrent = null;
+
+    const fields = {
+      cartao: document.getElementById('pct-cartao'),
+      retratilPct: document.getElementById('pct-retratil'),
+      sujidade1: document.getElementById('sujidade-1'),
+      sujidade2: document.getElementById('sujidade-2'),
+      sujidade3: document.getElementById('sujidade-3'),
+      useRetratilSofa: document.getElementById('use-retratil-sofa'),
+      useRetratilPoltrona: document.getElementById('use-retratil-poltrona'),
+      useRetratilCadeira: document.getElementById('use-retratil-cadeira'),
+      useRetratilColchao: document.getElementById('use-retratil-colchao'),
+      sofaLimite1: document.getElementById('sofa-limite-1'),
+      sofaLimite2: document.getElementById('sofa-limite-2'),
+      sofaLimite3: document.getElementById('sofa-limite-3'),
+      sofaLimite4: document.getElementById('sofa-limite-4'),
+      sofaBase1: document.getElementById('sofa-base-1'),
+      sofaBase2: document.getElementById('sofa-base-2'),
+      sofaBase3: document.getElementById('sofa-base-3'),
+      sofaBase4: document.getElementById('sofa-base-4'),
+      sofaBase5: document.getElementById('sofa-base-5'),
+      poltronaSlim: document.getElementById('poltrona-slim'),
+      poltronaAmamentacao: document.getElementById('poltrona-amamentacao'),
+      poltronaPapa: document.getElementById('poltrona-papa'),
+      poltronaReclinavel: document.getElementById('poltrona-reclinavel'),
+      amamentacaoTipo1: document.getElementById('amamentacao-tipo-1'),
+      amamentacaoTipo2: document.getElementById('amamentacao-tipo-2'),
+      amamentacaoEncosto: document.getElementById('amamentacao-encosto'),
+      amamentacaoBraco: document.getElementById('amamentacao-braco'),
+      cadeiraAssento: document.getElementById('cadeira-assento'),
+      cadeiraAssentoCostas: document.getElementById('cadeira-assento-costas'),
+      colchaoSolteiro: document.getElementById('colchao-solteiro'),
+      colchaoSolteiroKing: document.getElementById('colchao-solteiro-king'),
+      colchaoCasal: document.getElementById('colchao-casal'),
+      colchaoQueen: document.getElementById('colchao-queen'),
+      colchaoKing: document.getElementById('colchao-king'),
+    };
+
+    function setFlash(message, type = '') {
+      flash.textContent = message || '';
+      flash.className = `flash ${type}`.trim();
+    }
+
+    function formatCurrency(value) {
+      return moneyFormatter.format(Number(value || 0));
+    }
+
+    function toNumber(value, fallback = 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function getLabels(config) {
+      const services = (config && config.servicos) || {};
+      return {
+        sofa: (services.sofa && services.sofa.label) || 'Sofa',
+        poltrona: (services.poltrona && services.poltrona.label) || 'Poltrona',
+        cadeira: (services.cadeira && services.cadeira.label) || 'Cadeira',
+        colchao: (services.colchao && services.colchao.label) || 'Colchao',
+      };
+    }
+
+    function updateSummary() {
+      document.getElementById('summary-cartao').textContent = `${toNumber(fields.cartao.value).toFixed(1)}%`;
+      document.getElementById('summary-retratil').textContent = `${toNumber(fields.retratilPct.value).toFixed(1)}%`;
+      document.getElementById('summary-sujidade-2').textContent = `${toNumber(fields.sujidade2.value, 1).toFixed(2)}x`;
+      document.getElementById('summary-sofa-faixa').textContent = formatCurrency(fields.sofaBase2.value || 0);
+    }
+
+    function applyPricing(config) {
+      const pricing = config || {};
+      const percentuais = pricing.percentuais || {};
+      const sujidade = pricing.multiplicadores_sujidade || {};
+      const services = pricing.servicos || {};
+      const extras = (pricing.extras && pricing.extras.poltrona_amamentacao) || {};
+      const sofaFaixas = ((services.sofa || {}).faixas) || [];
+      const poltrona = ((services.poltrona || {}).modelos) || {};
+      const cadeira = ((services.cadeira || {}).modelos) || {};
+      const colchao = ((services.colchao || {}).modelos) || {};
+
+      fields.cartao.value = toNumber(percentuais.cartao).toFixed(1);
+      fields.retratilPct.value = toNumber(percentuais.sofa_retratil).toFixed(1);
+      fields.sujidade1.value = toNumber(sujidade['1'], 1).toFixed(2);
+      fields.sujidade2.value = toNumber(sujidade['2'], 1).toFixed(2);
+      fields.sujidade3.value = toNumber(sujidade['3'], 1).toFixed(2);
+      fields.useRetratilSofa.checked = Boolean((services.sofa || {}).usa_retratil);
+      fields.useRetratilPoltrona.checked = Boolean((services.poltrona || {}).usa_retratil);
+      fields.useRetratilCadeira.checked = Boolean((services.cadeira || {}).usa_retratil);
+      fields.useRetratilColchao.checked = Boolean((services.colchao || {}).usa_retratil);
+
+      fields.sofaLimite1.value = toNumber((sofaFaixas[0] || {}).limite_cm, 150);
+      fields.sofaLimite2.value = toNumber((sofaFaixas[1] || {}).limite_cm, 190);
+      fields.sofaLimite3.value = toNumber((sofaFaixas[2] || {}).limite_cm, 240);
+      fields.sofaLimite4.value = toNumber((sofaFaixas[3] || {}).limite_cm, 290);
+      fields.sofaBase1.value = toNumber((sofaFaixas[0] || {}).base_pix, 119);
+      fields.sofaBase2.value = toNumber((sofaFaixas[1] || {}).base_pix, 159);
+      fields.sofaBase3.value = toNumber((sofaFaixas[2] || {}).base_pix, 199);
+      fields.sofaBase4.value = toNumber((sofaFaixas[3] || {}).base_pix, 289);
+      fields.sofaBase5.value = toNumber((sofaFaixas[4] || {}).base_pix, 379);
+
+      fields.poltronaSlim.value = toNumber((poltrona.slim_decorativa || {}).base_pix, 79);
+      fields.poltronaAmamentacao.value = toNumber((poltrona.amamentacao || {}).base_pix, 89);
+      fields.poltronaPapa.value = toNumber((poltrona.papa || {}).base_pix, 109);
+      fields.poltronaReclinavel.value = toNumber((poltrona.reclinavel_retratil || {}).base_pix, 119);
+
+      fields.amamentacaoTipo1.value = toNumber(extras.tipo_1_base_pix, 89);
+      fields.amamentacaoTipo2.value = toNumber(extras.tipo_2_base_pix, 99);
+      fields.amamentacaoEncosto.value = toNumber(extras.encosto_alto_adicional_pix, 10);
+      fields.amamentacaoBraco.value = toNumber(extras.braco_adicional_pix, 8);
+
+      fields.cadeiraAssento.value = toNumber((cadeira.assento || {}).base_pix, 30);
+      fields.cadeiraAssentoCostas.value = toNumber((cadeira.assento_costas || {}).base_pix, 50);
+
+      fields.colchaoSolteiro.value = toNumber((colchao.solteiro_padrao || {}).base_pix, 100);
+      fields.colchaoSolteiroKing.value = toNumber((colchao.solteiro_king || {}).base_pix, 130);
+      fields.colchaoCasal.value = toNumber((colchao.casal_padrao || {}).base_pix, 150);
+      fields.colchaoQueen.value = toNumber((colchao.casal_queen || {}).base_pix, 180);
+      fields.colchaoKing.value = toNumber((colchao.casal_king || {}).base_pix, 220);
+
+      updateSummary();
+    }
+
+    function collectPricing() {
+      const source = pricingCurrent || pricingDefaults || {};
+      const labels = getLabels(source);
+      return {
+        percentuais: {
+          cartao: toNumber(fields.cartao.value),
+          sofa_retratil: toNumber(fields.retratilPct.value),
+        },
+        multiplicadores_sujidade: {
+          '1': toNumber(fields.sujidade1.value, 1),
+          '2': toNumber(fields.sujidade2.value, 1),
+          '3': toNumber(fields.sujidade3.value, 1),
+        },
+        extras: {
+          poltrona_amamentacao: {
+            tipo_1_base_pix: toNumber(fields.amamentacaoTipo1.value),
+            tipo_2_base_pix: toNumber(fields.amamentacaoTipo2.value),
+            encosto_alto_adicional_pix: toNumber(fields.amamentacaoEncosto.value),
+            braco_adicional_pix: toNumber(fields.amamentacaoBraco.value),
+          },
+        },
+        servicos: {
+          sofa: {
+            label: labels.sofa,
+            usa_retratil: fields.useRetratilSofa.checked,
+            faixas: [
+              { limite_cm: toNumber(fields.sofaLimite1.value, 150), base_pix: toNumber(fields.sofaBase1.value) },
+              { limite_cm: toNumber(fields.sofaLimite2.value, 190), base_pix: toNumber(fields.sofaBase2.value) },
+              { limite_cm: toNumber(fields.sofaLimite3.value, 240), base_pix: toNumber(fields.sofaBase3.value) },
+              { limite_cm: toNumber(fields.sofaLimite4.value, 290), base_pix: toNumber(fields.sofaBase4.value) },
+              { limite_cm: 'Infinity', base_pix: toNumber(fields.sofaBase5.value) },
+            ],
+          },
+          poltrona: {
+            label: labels.poltrona,
+            usa_retratil: fields.useRetratilPoltrona.checked,
+            modelos: {
+              slim_decorativa: { label: 'Slim/Decorativa', base_pix: toNumber(fields.poltronaSlim.value) },
+              amamentacao: { label: 'Amamentacao', base_pix: toNumber(fields.poltronaAmamentacao.value) },
+              papa: { label: 'Papai', base_pix: toNumber(fields.poltronaPapa.value) },
+              reclinavel_retratil: { label: 'Reclinavel/Retratil', base_pix: toNumber(fields.poltronaReclinavel.value) },
+            },
+          },
+          cadeira: {
+            label: labels.cadeira,
+            usa_retratil: fields.useRetratilCadeira.checked,
+            modelos: {
+              assento: { label: 'Assento estofado', base_pix: toNumber(fields.cadeiraAssento.value) },
+              assento_costas: { label: 'Assento + costas estofados', base_pix: toNumber(fields.cadeiraAssentoCostas.value) },
+            },
+          },
+          colchao: {
+            label: labels.colchao,
+            usa_retratil: fields.useRetratilColchao.checked,
+            modelos: {
+              solteiro_padrao: { label: 'Solteiro padrao', base_pix: toNumber(fields.colchaoSolteiro.value) },
+              solteiro_king: { label: 'Solteiro king', base_pix: toNumber(fields.colchaoSolteiroKing.value) },
+              casal_padrao: { label: 'Casal padrao', base_pix: toNumber(fields.colchaoCasal.value) },
+              casal_queen: { label: 'Casal queen size', base_pix: toNumber(fields.colchaoQueen.value) },
+              casal_king: { label: 'Casal king size', base_pix: toNumber(fields.colchaoKing.value) },
+            },
+          },
+        },
+      };
+    }
+
+    async function loadPricing() {
+      const session = await auth.requireAuth({ redirectOnFail: true });
+      const user = (session && session.user) || auth.getStoredUser() || {};
+      document.getElementById('user-line').textContent = `${user.nome || user.login || 'Administrador'} | Precificacao web`;
+      document.getElementById('api-line').textContent = auth.getApiBase() || 'URL da API nao configurada';
+
+      if (!user.is_admin) {
+        accessPanel.classList.remove('hidden');
+        formShell.classList.add('hidden');
+        throw new Error('Somente o administrador pode editar a precificacao.');
+      }
+
+      accessPanel.classList.add('hidden');
+      formShell.classList.remove('hidden');
+
+      const payload = await auth.apiFetch('/api/admin/pricing');
+      pricingCurrent = (payload.data && payload.data.pricing) || null;
+      pricingDefaults = (payload.data && payload.data.defaults) || null;
+      applyPricing(pricingCurrent || pricingDefaults || {});
+      setFlash('Precificacao carregada da API.', 'success');
+    }
+
+    async function savePricing() {
+      const pricing = collectPricing();
+      const payload = await auth.apiFetch('/api/admin/pricing', {
+        method: 'PUT',
+        body: JSON.stringify({ pricing }),
+      });
+      pricingCurrent = (payload.data && payload.data.pricing) || pricing;
+      applyPricing(pricingCurrent);
+      setFlash('Precificacao salva com sucesso.', 'success');
+    }
+
+    document.getElementById('reload-button').addEventListener('click', async () => {
+      try {
+        await loadPricing();
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    });
+
+    document.getElementById('restore-button').addEventListener('click', () => {
+      if (!pricingDefaults) {
+        setFlash('Configuracao padrao ainda nao foi carregada.', 'error');
+        return;
+      }
+      applyPricing(pricingDefaults);
+      setFlash('Configuracao padrao aplicada na tela. Clique em Salvar para confirmar.', 'success');
+    });
+
+    document.getElementById('save-button').addEventListener('click', async () => {
+      try {
+        await savePricing();
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    });
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await auth.logout();
+      window.location.href = auth.buildLoginUrl('pricing.html');
+    });
+
+    Object.values(fields).forEach((field) => {
+      field.addEventListener('input', updateSummary);
+      field.addEventListener('change', updateSummary);
+    });
+
+    loadPricing().catch((error) => {
+      setFlash(error.message, 'error');
+    });
+  </script>
+</body>
+</html>
