@@ -162,13 +162,53 @@
       flex-wrap: wrap;
       margin-top: 18px;
     }
+    .status-note {
+      margin-top: 14px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .status-note.dirty {
+      color: #ffd188;
+    }
     .flash { min-height: 24px; margin-top: 18px; font-weight: 600; }
     .flash.error { color: var(--danger); }
     .flash.success { color: var(--accent); }
+    .preview-result {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .result-box, .history-item {
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: var(--surface-soft);
+    }
+    .result-box strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.5rem;
+    }
+    .history-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .history-item strong,
+    .history-item span {
+      display: block;
+    }
+    .history-item span {
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 6px;
+    }
     .hidden { display: none; }
     @media (max-width: 1100px) {
       .hero, .form-grid, .summary-grid { grid-template-columns: 1fr; }
       .section-grid, .section-grid.cols-3 { grid-template-columns: 1fr; }
+      .preview-result { grid-template-columns: 1fr; }
     }
     @media (max-width: 720px) {
       .shell { width: min(100%, calc(100% - 20px)); }
@@ -230,6 +270,7 @@
           <button id="restore-button" type="button">Restaurar padrao</button>
           <button id="save-button" type="button" class="primary">Salvar precificacao</button>
         </div>
+        <div id="dirty-note" class="status-note">Tudo salvo na API.</div>
         <div id="flash" class="flash"></div>
       </article>
     </section>
@@ -401,16 +442,86 @@
         </div>
       </section>
     </div>
+
+    <div id="support-shell" class="form-grid hidden">
+      <section class="panel">
+        <div class="eyebrow">Previa</div>
+        <h3>Teste de calculo com os valores editados</h3>
+        <p class="small-note">A prévia usa exatamente os campos alterados nesta tela, antes mesmo de salvar.</p>
+        <div class="section-grid">
+          <div class="field">
+            <label for="preview-servico">Servico</label>
+            <select id="preview-servico"></select>
+          </div>
+          <div class="field">
+            <label for="preview-modelo">Modelo</label>
+            <select id="preview-modelo"></select>
+          </div>
+          <div class="field" id="preview-largura-field">
+            <label for="preview-largura">Largura (cm)</label>
+            <input id="preview-largura" type="number" min="0" step="10" value="200" />
+          </div>
+          <div class="field">
+            <label for="preview-sujidade">Sujidade</label>
+            <select id="preview-sujidade">
+              <option value="1">1 - Baixa</option>
+              <option value="2" selected>2 - Media</option>
+              <option value="3">3 - Alta</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="preview-quantidade">Quantidade</label>
+            <input id="preview-quantidade" type="number" min="1" step="1" value="1" />
+          </div>
+          <label class="toggle" id="preview-retratil-field"><input id="preview-retratil" type="checkbox" /> <span>Aplicar retratil</span></label>
+          <div class="field hidden" id="preview-balanco-field">
+            <label for="preview-balanco">Balanco</label>
+            <select id="preview-balanco">
+              <option value="1">Tipo 1</option>
+              <option value="2">Tipo 2</option>
+            </select>
+          </div>
+          <label class="toggle hidden" id="preview-encosto-field"><input id="preview-encosto" type="checkbox" /> <span>Encosto alto</span></label>
+          <label class="toggle hidden" id="preview-braco-field"><input id="preview-braco" type="checkbox" checked /> <span>Com braco</span></label>
+        </div>
+        <div class="preview-result">
+          <div class="result-box">
+            <span>PIX estimado</span>
+            <strong id="preview-pix">R$ 0,00</strong>
+            <span class="small-note" id="preview-base">Base aplicada: R$ 0,00</span>
+          </div>
+          <div class="result-box">
+            <span>Cartao estimado</span>
+            <strong id="preview-cartao">R$ 0,00</strong>
+            <span class="small-note" id="preview-meta">Sem detalhes ainda.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="eyebrow">Historico</div>
+        <h3>Ultimas alteracoes salvas</h3>
+        <p class="small-note">Historico simples das mudanças de precificação gravadas pela API.</p>
+        <div id="history-list" class="history-list">
+          <div class="history-item"><strong>Nenhuma alteracao salva ainda.</strong></div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script>
     const auth = window.HomeWashAuth;
     const flash = document.getElementById('flash');
     const formShell = document.getElementById('form-shell');
+    const supportShell = document.getElementById('support-shell');
     const accessPanel = document.getElementById('access-panel');
+    const dirtyNote = document.getElementById('dirty-note');
     const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
     let pricingDefaults = null;
     let pricingCurrent = null;
+    let pricingHistory = [];
+    let lastSavedSnapshot = '';
+    let hasUnsavedChanges = false;
 
     const fields = {
       cartao: document.getElementById('pct-cartao'),
@@ -448,6 +559,28 @@
       colchaoKing: document.getElementById('colchao-king'),
     };
 
+    const preview = {
+      service: document.getElementById('preview-servico'),
+      model: document.getElementById('preview-modelo'),
+      larguraField: document.getElementById('preview-largura-field'),
+      largura: document.getElementById('preview-largura'),
+      sujidade: document.getElementById('preview-sujidade'),
+      quantidade: document.getElementById('preview-quantidade'),
+      retratilField: document.getElementById('preview-retratil-field'),
+      retratil: document.getElementById('preview-retratil'),
+      balancoField: document.getElementById('preview-balanco-field'),
+      balanco: document.getElementById('preview-balanco'),
+      encostoField: document.getElementById('preview-encosto-field'),
+      encosto: document.getElementById('preview-encosto'),
+      bracoField: document.getElementById('preview-braco-field'),
+      braco: document.getElementById('preview-braco'),
+      pix: document.getElementById('preview-pix'),
+      cartao: document.getElementById('preview-cartao'),
+      base: document.getElementById('preview-base'),
+      meta: document.getElementById('preview-meta'),
+      historyList: document.getElementById('history-list'),
+    };
+
     function setFlash(message, type = '') {
       flash.textContent = message || '';
       flash.className = `flash ${type}`.trim();
@@ -455,6 +588,10 @@
 
     function formatCurrency(value) {
       return moneyFormatter.format(Number(value || 0));
+    }
+
+    function stableStringify(value) {
+      return JSON.stringify(value);
     }
 
     function toNumber(value, fallback = 0) {
@@ -477,6 +614,123 @@
       document.getElementById('summary-retratil').textContent = `${toNumber(fields.retratilPct.value).toFixed(1)}%`;
       document.getElementById('summary-sujidade-2').textContent = `${toNumber(fields.sujidade2.value, 1).toFixed(2)}x`;
       document.getElementById('summary-sofa-faixa').textContent = formatCurrency(fields.sofaBase2.value || 0);
+    }
+
+    function setDirtyState(dirty) {
+      hasUnsavedChanges = Boolean(dirty);
+      dirtyNote.textContent = hasUnsavedChanges ? 'Alteracoes nao salvas nesta tela.' : 'Tudo salvo na API.';
+      dirtyNote.className = hasUnsavedChanges ? 'status-note dirty' : 'status-note';
+    }
+
+    function syncDirtyState() {
+      setDirtyState(stableStringify(collectPricing()) !== lastSavedSnapshot);
+    }
+
+    function formatHistoryDate(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value || '-';
+      return date.toLocaleString('pt-BR');
+    }
+
+    function renderHistory(items) {
+      if (!Array.isArray(items) || !items.length) {
+        preview.historyList.innerHTML = '<div class="history-item"><strong>Nenhuma alteracao salva ainda.</strong></div>';
+        return;
+      }
+      preview.historyList.innerHTML = items.map((item) => {
+        const resumo = item.resumo || {};
+        return `
+          <article class="history-item">
+            <strong>${formatHistoryDate(item.timestamp)} | ${item.usuario || 'admin'}</strong>
+            <span>Cartao: ${Number(resumo.cartao || 0).toFixed(1)}% | Retratil: ${Number(resumo.retratil || 0).toFixed(1)}%</span>
+            <span>Sujidade 2: ${Number(resumo.sujidade_2 || 1).toFixed(2)}x | Sofa 190 cm: ${formatCurrency(resumo.sofa_190 || 0)}</span>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function populatePreviewOptions() {
+      const pricing = collectPricing();
+      const services = pricing.servicos || {};
+      const currentService = preview.service.value || Object.keys(services)[0] || 'sofa';
+      preview.service.innerHTML = Object.entries(services).map(([key, config]) => `<option value="${key}">${config.label || key}</option>`).join('');
+      preview.service.value = services[currentService] ? currentService : (Object.keys(services)[0] || 'sofa');
+      updatePreviewModels();
+    }
+
+    function updatePreviewModels() {
+      const pricing = collectPricing();
+      const serviceKey = preview.service.value;
+      const serviceConfig = (pricing.servicos || {})[serviceKey] || {};
+      const models = serviceConfig.modelos || {};
+      const modelKeys = Object.keys(models);
+      preview.model.innerHTML = modelKeys.length
+        ? modelKeys.map((key) => `<option value="${key}">${models[key].label || key}</option>`).join('')
+        : '<option value="">Padrao</option>';
+      if (!modelKeys.includes(preview.model.value)) {
+        preview.model.value = modelKeys[0] || '';
+      }
+      preview.larguraField.classList.toggle('hidden', serviceKey !== 'sofa');
+      preview.retratilField.classList.toggle('hidden', !serviceConfig.usa_retratil);
+      if (!serviceConfig.usa_retratil) {
+        preview.retratil.checked = false;
+      }
+      const isAmamentacao = serviceKey === 'poltrona' && preview.model.value === 'amamentacao';
+      preview.balancoField.classList.toggle('hidden', !isAmamentacao);
+      preview.encostoField.classList.toggle('hidden', !isAmamentacao);
+      preview.bracoField.classList.toggle('hidden', !isAmamentacao);
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const pricing = collectPricing();
+      const serviceKey = preview.service.value || 'sofa';
+      const serviceConfig = (pricing.servicos || {})[serviceKey] || {};
+      const sujidade = Number(preview.sujidade.value || 1);
+      const quantidade = Math.max(1, Number(preview.quantidade.value || 1));
+      const extras = {};
+      let basePix = 0;
+
+      if (serviceKey === 'poltrona' && preview.model.value === 'amamentacao') {
+        extras.balanco_tipo = Number(preview.balanco.value || 1);
+        extras.encosto_alto = preview.encosto.checked;
+        extras.tem_braco = preview.braco.checked;
+      }
+
+      if (serviceKey === 'sofa') {
+        const faixas = serviceConfig.faixas || [];
+        basePix = Number((faixas[faixas.length - 1] || {}).base_pix || 0);
+        for (const faixa of faixas) {
+          const limit = String(faixa.limite_cm) === 'Infinity' ? Number.POSITIVE_INFINITY : Number(faixa.limite_cm);
+          if (Number(preview.largura.value || 0) <= limit) {
+            basePix = Number(faixa.base_pix || 0);
+            break;
+          }
+        }
+      } else {
+        const models = serviceConfig.modelos || {};
+        const modelKey = preview.model.value;
+        basePix = Number((models[modelKey] || {}).base_pix || 0);
+        if (serviceKey === 'poltrona' && modelKey === 'amamentacao') {
+          const configExtras = ((pricing.extras || {}).poltrona_amamentacao) || {};
+          basePix = Number(extras.balanco_tipo === 2 ? configExtras.tipo_2_base_pix : configExtras.tipo_1_base_pix || 0);
+          if (extras.encosto_alto) basePix += Number(configExtras.encosto_alto_adicional_pix || 0);
+          if (extras.tem_braco) basePix += Number(configExtras.braco_adicional_pix || 0);
+        }
+      }
+
+      if (serviceConfig.usa_retratil && preview.retratil.checked) {
+        basePix *= 1 + (Number((pricing.percentuais || {}).sofa_retratil || 0) / 100);
+      }
+
+      const pixUnit = basePix * Number((pricing.multiplicadores_sujidade || {})[String(sujidade)] || 1);
+      const cardUnit = pixUnit * (1 + (Number((pricing.percentuais || {}).cartao || 0) / 100));
+      const totalPix = pixUnit * quantidade;
+      const totalCard = cardUnit * quantidade;
+      preview.pix.textContent = formatCurrency(totalPix);
+      preview.cartao.textContent = formatCurrency(totalCard);
+      preview.base.textContent = `Base aplicada: ${formatCurrency(basePix)} por item`;
+      preview.meta.textContent = `${quantidade} item(ns) | Sujidade ${sujidade} | ${preview.retratil.checked ? 'Retratil' : 'Fixo'}`;
     }
 
     function applyPricing(config) {
@@ -530,6 +784,7 @@
       fields.colchaoKing.value = toNumber((colchao.casal_king || {}).base_pix, 220);
 
       updateSummary();
+      populatePreviewOptions();
     }
 
     function collectPricing() {
@@ -607,16 +862,22 @@
       if (!user.is_admin) {
         accessPanel.classList.remove('hidden');
         formShell.classList.add('hidden');
+        supportShell.classList.add('hidden');
         throw new Error('Somente o administrador pode editar a precificacao.');
       }
 
       accessPanel.classList.add('hidden');
       formShell.classList.remove('hidden');
+      supportShell.classList.remove('hidden');
 
       const payload = await auth.apiFetch('/api/admin/pricing');
       pricingCurrent = (payload.data && payload.data.pricing) || null;
       pricingDefaults = (payload.data && payload.data.defaults) || null;
+      pricingHistory = (payload.data && payload.data.history) || [];
       applyPricing(pricingCurrent || pricingDefaults || {});
+      renderHistory(pricingHistory);
+      lastSavedSnapshot = stableStringify(collectPricing());
+      setDirtyState(false);
       setFlash('Precificacao carregada da API.', 'success');
     }
 
@@ -627,7 +888,11 @@
         body: JSON.stringify({ pricing }),
       });
       pricingCurrent = (payload.data && payload.data.pricing) || pricing;
+      pricingHistory = (payload.data && payload.data.history) || pricingHistory;
       applyPricing(pricingCurrent);
+      renderHistory(pricingHistory);
+      lastSavedSnapshot = stableStringify(collectPricing());
+      setDirtyState(false);
       setFlash('Precificacao salva com sucesso.', 'success');
     }
 
@@ -645,6 +910,7 @@
         return;
       }
       applyPricing(pricingDefaults);
+      syncDirtyState();
       setFlash('Configuracao padrao aplicada na tela. Clique em Salvar para confirmar.', 'success');
     });
 
@@ -662,8 +928,33 @@
     });
 
     Object.values(fields).forEach((field) => {
-      field.addEventListener('input', updateSummary);
-      field.addEventListener('change', updateSummary);
+      field.addEventListener('input', () => {
+        updateSummary();
+        populatePreviewOptions();
+        syncDirtyState();
+      });
+      field.addEventListener('change', () => {
+        updateSummary();
+        populatePreviewOptions();
+        syncDirtyState();
+      });
+    });
+
+    [preview.service, preview.model, preview.largura, preview.sujidade, preview.quantidade, preview.retratil, preview.balanco, preview.encosto, preview.braco].forEach((field) => {
+      field.addEventListener('input', renderPreview);
+      field.addEventListener('change', () => {
+        if (field === preview.service || field === preview.model) {
+          updatePreviewModels();
+          return;
+        }
+        renderPreview();
+      });
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = '';
     });
 
     loadPricing().catch((error) => {
