@@ -595,47 +595,67 @@
   <script>
     const auth = window.HomeWashAuth;
     const LOCAL_QUEUE_KEY = 'homewash.pendingQuotes';
-    const LOCAL_SERVICES = {
-      sofa: {
-        label: 'Sofa',
-        faixas: [
-          [150, 119.0],
-          [190, 159.0],
-          [240, 199.0],
-          [290, 289.0],
-          [Number.POSITIVE_INFINITY, 379.0],
-        ],
-        usaRetratil: true,
+    const LOCAL_PRICING_CONFIG = {
+      percentuais: {
+        cartao: 8.0,
+        sofa_retratil: 5.0,
       },
-      poltrona: {
-        label: 'Poltrona',
-        modelos: {
-          slim_decorativa: { label: 'Slim/Decorativa', basePix: 79.0 },
-          amamentacao: { label: 'Amamentacao', basePix: 89.0 },
-          papa: { label: 'Papai', basePix: 109.0 },
-          reclinavel_retratil: { label: 'Reclinavel/Retratil', basePix: 119.0 },
+      multiplicadores_sujidade: {
+        1: 1.0,
+        2: 1.2,
+        3: 1.4,
+      },
+      extras: {
+        poltrona_amamentacao: {
+          tipo_1_base_pix: 89.0,
+          tipo_2_base_pix: 99.0,
+          encosto_alto_adicional_pix: 10.0,
+          braco_adicional_pix: 8.0,
         },
       },
-      cadeira: {
-        label: 'Cadeira',
-        modelos: {
-          assento: { label: 'Assento estofado', basePix: 30.0 },
-          assento_costas: { label: 'Assento + costas estofados', basePix: 50.0 },
+      servicos: {
+        sofa: {
+          label: 'Sofa',
+          faixas: [
+            { limite_cm: 150.0, base_pix: 119.0 },
+            { limite_cm: 190.0, base_pix: 159.0 },
+            { limite_cm: 240.0, base_pix: 199.0 },
+            { limite_cm: 290.0, base_pix: 289.0 },
+            { limite_cm: Number.POSITIVE_INFINITY, base_pix: 379.0 },
+          ],
+          usa_retratil: true,
         },
-      },
-      colchao: {
-        label: 'Colchao',
-        modelos: {
-          solteiro_padrao: { label: 'Solteiro padrao', basePix: 100.0 },
-          solteiro_king: { label: 'Solteiro king', basePix: 130.0 },
-          casal_padrao: { label: 'Casal padrao', basePix: 150.0 },
-          casal_queen: { label: 'Casal queen size', basePix: 180.0 },
-          casal_king: { label: 'Casal king size', basePix: 220.0 },
+        poltrona: {
+          label: 'Poltrona',
+          modelos: {
+            slim_decorativa: { label: 'Slim/Decorativa', base_pix: 79.0 },
+            amamentacao: { label: 'Amamentacao', base_pix: 89.0 },
+            papa: { label: 'Papai', base_pix: 109.0 },
+            reclinavel_retratil: { label: 'Reclinavel/Retratil', base_pix: 119.0 },
+          },
+          usa_retratil: false,
+        },
+        cadeira: {
+          label: 'Cadeira',
+          modelos: {
+            assento: { label: 'Assento estofado', base_pix: 30.0 },
+            assento_costas: { label: 'Assento + costas estofados', base_pix: 50.0 },
+          },
+          usa_retratil: false,
+        },
+        colchao: {
+          label: 'Colchao',
+          modelos: {
+            solteiro_padrao: { label: 'Solteiro padrao', base_pix: 100.0 },
+            solteiro_king: { label: 'Solteiro king', base_pix: 130.0 },
+            casal_padrao: { label: 'Casal padrao', base_pix: 150.0 },
+            casal_queen: { label: 'Casal queen size', base_pix: 180.0 },
+            casal_king: { label: 'Casal king size', base_pix: 220.0 },
+          },
+          usa_retratil: false,
         },
       },
     };
-    const SUJIDADE_MULTIPLIER = { 1: 1.0, 2: 1.2, 3: 1.4 };
-    const CARD_MULTIPLIER = 1.08;
     const serviceSelect = document.getElementById('servico');
     const modelSelect = document.getElementById('modelo');
     const quoteFormTitle = document.getElementById('quote-form-title');
@@ -693,10 +713,15 @@
       localStorage.setItem(LOCAL_QUEUE_KEY, JSON.stringify(items || []));
     }
 
-    function buildLocalMetadata() {
+    function getPricingConfig() {
+      return (metadata && metadata.pricing) || LOCAL_PRICING_CONFIG;
+    }
+
+    function buildMetadataFromPricing(pricingConfig) {
+      const normalizedPricing = pricingConfig || LOCAL_PRICING_CONFIG;
       const services = {};
       const models = {};
-      Object.entries(LOCAL_SERVICES).forEach(([serviceKey, config]) => {
+      Object.entries(normalizedPricing.servicos || {}).forEach(([serviceKey, config]) => {
         services[serviceKey] = config.label;
         models[serviceKey] = {};
         Object.entries(config.modelos || {}).forEach(([modelKey, modelConfig]) => {
@@ -706,6 +731,7 @@
       return {
         services,
         models,
+        pricing: normalizedPricing,
         sujidade: {
           1: 'Baixa (Apenas Poeira)',
           2: 'Media (Uso Normal)',
@@ -715,33 +741,42 @@
       };
     }
 
+    function buildLocalMetadata() {
+      return buildMetadataFromPricing(LOCAL_PRICING_CONFIG);
+    }
+
     function serviceLabel(serviceKey) {
-      return (LOCAL_SERVICES[serviceKey] && LOCAL_SERVICES[serviceKey].label) || 'Sofa';
+      const services = getPricingConfig().servicos || {};
+      return (services[serviceKey] && services[serviceKey].label) || 'Sofa';
     }
 
     function modelLabel(serviceKey, modelKey) {
-      const config = LOCAL_SERVICES[serviceKey] || {};
+      const config = (getPricingConfig().servicos || {})[serviceKey] || {};
       const models = config.modelos || {};
       if (!Object.keys(models).length) return 'Padrao';
       return (models[modelKey] && models[modelKey].label) || Object.values(models)[0].label;
     }
 
     function calculateLocalQuote(payload) {
+      const pricing = getPricingConfig();
       const serviceKey = String(payload.servico || 'sofa').trim().toLowerCase();
-      const config = LOCAL_SERVICES[serviceKey] || LOCAL_SERVICES.sofa;
+      const services = pricing.servicos || {};
+      const config = services[serviceKey] || services.sofa || LOCAL_PRICING_CONFIG.servicos.sofa;
       const extras = payload.extras || {};
       let basePix = 0;
 
       if (serviceKey === 'sofa') {
-        basePix = config.faixas[config.faixas.length - 1][1];
-        for (const [limit, faixaPix] of config.faixas) {
+        basePix = Number((config.faixas[config.faixas.length - 1] || {}).base_pix || 0);
+        for (const faixa of config.faixas || []) {
+          const limit = String(faixa.limite_cm) === 'Infinity' ? Number.POSITIVE_INFINITY : Number(faixa.limite_cm);
+          const faixaPix = Number(faixa.base_pix || 0);
           if (Number(payload.largura || 0) <= limit) {
             basePix = faixaPix;
             break;
           }
         }
         if (payload.retratil) {
-          basePix *= 1.05;
+          basePix *= 1 + (Number(pricing.percentuais?.sofa_retratil || 0) / 100);
         }
       } else {
         const models = config.modelos || {};
@@ -749,18 +784,23 @@
         if (!models[selectedModel]) {
           selectedModel = Object.keys(models)[0] || '';
         }
-        basePix = Number((models[selectedModel] && models[selectedModel].basePix) || 0);
+        basePix = Number((models[selectedModel] && models[selectedModel].base_pix) || 0);
         if (serviceKey === 'poltrona' && selectedModel === 'amamentacao') {
+          const extrasConfig = pricing.extras?.poltrona_amamentacao || {};
           const balanceType = Number(extras.balanco_tipo || 1);
-          basePix = balanceType === 2 ? 99.0 : 89.0;
-          if (extras.encosto_alto) basePix += 10.0;
-          if (extras.tem_braco) basePix += 8.0;
+          basePix = balanceType === 2
+            ? Number(extrasConfig.tipo_2_base_pix || 99.0)
+            : Number(extrasConfig.tipo_1_base_pix || 89.0);
+          if (extras.encosto_alto) basePix += Number(extrasConfig.encosto_alto_adicional_pix || 10.0);
+          if (extras.tem_braco) basePix += Number(extrasConfig.braco_adicional_pix || 8.0);
         }
       }
 
       const sujidade = Number(payload.sujidade || 1);
-      const totalPix = Number((basePix * (SUJIDADE_MULTIPLIER[sujidade] || 1)).toFixed(2));
-      const totalCartao = Number((totalPix * CARD_MULTIPLIER).toFixed(2));
+      const sujidadeMultiplier = Number((pricing.multiplicadores_sujidade || {})[sujidade] || 1);
+      const totalPix = Number((basePix * sujidadeMultiplier).toFixed(2));
+      const totalCartao = Number((totalPix * (1 + (Number(pricing.percentuais?.cartao || 0) / 100))).toFixed(2));
+      const sujidadeLabels = (metadata && metadata.sujidade) || buildLocalMetadata().sujidade;
 
       return {
         cliente: payload.cliente,
@@ -771,7 +811,7 @@
         largura: Number(payload.largura || 0),
         retratil: Boolean(payload.retratil),
         sujidade,
-        sujidade_label: `${sujidade} - ${(buildLocalMetadata().sujidade[sujidade] || 'Baixa')}`,
+        sujidade_label: `${sujidade} - ${(sujidadeLabels[sujidade] || 'Baixa')}`,
         extras,
         total_pix: totalPix,
         total_cartao: totalCartao,

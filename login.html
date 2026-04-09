@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Home Wash Web App | Acesso</title>
-  <meta name="description" content="Acesso simplificado ao painel da Home Wash com configuracao da API quando necessario." />
+  <meta name="description" content="Login da Home Wash Web com configuracao da API e sessao bearer." />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <script src="landing_page_config.js"></script>
   <script src="auth_web.js"></script>
@@ -106,8 +106,8 @@
   <main class="login-shell">
     <section class="panel">
       <div class="eyebrow">Acesso web</div>
-      <h1>Abrir o painel da Home Wash</h1>
-      <p class="lead">O login deixou de ser necessario para o seu uso interno. Esta tela ficou apenas como atalho para configurar a API e abrir os modulos principais.</p>
+      <h1>Entrar na Home Wash Web</h1>
+      <p class="lead">Use o mesmo usuario do sistema para abrir painel, clientes, agendamentos e sincronizacao. O modulo de orcamentos continua podendo calcular offline mesmo sem login.</p>
 
       <div class="field">
         <label for="api-url">URL da API</label>
@@ -118,10 +118,33 @@
         <button id="test-api" type="button" class="secondary">Testar conexao</button>
       </div>
 
+      <div class="field">
+        <label for="nome">Nome exibido</label>
+        <input id="nome" type="text" placeholder="Seu nome" />
+      </div>
+
+      <div class="field">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" placeholder="voce@exemplo.com" />
+      </div>
+
+      <div class="field">
+        <label for="usuario">Usuario ou e-mail</label>
+        <input id="usuario" type="text" placeholder="Seu usuario do sistema" />
+      </div>
+
+      <div class="field">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" placeholder="Sua senha" />
+      </div>
+
       <div class="actions">
-        <a class="link-button" href="dashboard.html">Abrir painel</a>
-        <a class="link-button secondary" href="app.html">Abrir orcamentos</a>
-        <a class="link-button secondary" href="dashboard.html">Voltar para o painel</a>
+        <button id="login-submit" type="button">Entrar</button>
+        <button id="register-submit" type="button" class="secondary">Criar primeiro acesso</button>
+      </div>
+
+      <div class="actions">
+        <a class="link-button secondary" href="app.html">Abrir orcamentos offline</a>
       </div>
       <div id="flash" class="flash"></div>
     </section>
@@ -129,19 +152,19 @@
     <aside class="panel">
       <div class="eyebrow">Uso simplificado</div>
       <h2>Fluxo atual</h2>
-      <p class="small-note">Agora o app web abre direto nas telas principais. A API continua opcional para salvar, consultar e sincronizar os dados.</p>
+      <p class="small-note">Painel, clientes, agenda e sincronizacao agora exigem sessao real da API. Orcamentos continuam funcionando em modo offline no navegador e sincronizam depois.</p>
       <div class="metric-list">
         <div class="metric">
-          <strong>1. Sem login obrigatorio</strong>
-          <span class="small-note">O acesso foi simplificado para o seu uso individual no dia a dia.</span>
+          <strong>1. Login real no painel</strong>
+          <span class="small-note">A sessao web agora usa token bearer da API para evitar estado local falso.</span>
         </div>
         <div class="metric">
-          <strong>2. API opcional</strong>
+          <strong>2. API configuravel</strong>
           <span class="small-note">Quando a API estiver online, clientes, agenda e historico usam a base local normalmente.</span>
         </div>
         <div class="metric">
-          <strong>3. Dados validados</strong>
-          <span class="small-note">Cliente, telefone, e-mails e agenda continuam sendo validados no backend antes de gravar.</span>
+          <strong>3. Orcamento offline preservado</strong>
+          <span class="small-note">Mesmo sem login ou sem API, a tela de orcamentos ainda consegue calcular e guardar fila local.</span>
         </div>
       </div>
     </aside>
@@ -150,6 +173,10 @@
   <script>
     const auth = window.HomeWashAuth;
     const apiInput = document.getElementById('api-url');
+    const nameInput = document.getElementById('nome');
+    const emailInput = document.getElementById('email');
+    const userInput = document.getElementById('usuario');
+    const passwordInput = document.getElementById('senha');
     const flash = document.getElementById('flash');
 
     function setFlash(message, type = '') {
@@ -173,6 +200,46 @@
         setFlash(error.message, 'error');
       }
     });
+
+    document.getElementById('login-submit').addEventListener('click', async () => {
+      try {
+        auth.saveApiInput(apiInput);
+        const usuario = userInput.value.trim();
+        const senha = passwordInput.value;
+        if (!usuario || !senha) {
+          throw new Error('Informe usuario e senha.');
+        }
+        await auth.login(usuario, senha);
+        window.location.href = auth.getNextPage('dashboard.html');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    });
+
+    document.getElementById('register-submit').addEventListener('click', async () => {
+      try {
+        auth.saveApiInput(apiInput);
+        const usuario = userInput.value.trim();
+        const senha = passwordInput.value;
+        const nome = nameInput.value.trim() || usuario;
+        const email = emailInput.value.trim();
+        if (!usuario || !senha) {
+          throw new Error('Informe pelo menos usuario e senha para criar o acesso.');
+        }
+        await auth.register({ usuario, senha, nome, email });
+        window.location.href = auth.getNextPage('dashboard.html');
+      } catch (error) {
+        setFlash(error.message, 'error');
+      }
+    });
+
+    if (auth.hasValidSession()) {
+      auth.requireAuth({ redirectOnFail: false })
+        .then(() => {
+          window.location.href = auth.getNextPage('dashboard.html');
+        })
+        .catch(() => {});
+    }
   </script>
 </body>
 </html>

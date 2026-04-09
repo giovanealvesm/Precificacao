@@ -176,6 +176,44 @@
       font-size: 0.92rem;
       display: none;
     }
+    .detail-card {
+      margin-top: 18px;
+      border-radius: 20px;
+      padding: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0 16px;
+    }
+    .detail-stack {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .detail-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .detail-item {
+      border-radius: 16px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.025);
+    }
+    .detail-item strong,
+    .detail-item span {
+      display: block;
+    }
+    .detail-item span {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
     .flash { min-height: 24px; margin-top: 14px; font-weight: 600; }
     .flash.error { color: var(--danger); }
     .flash.success { color: #87f0b7; }
@@ -183,6 +221,7 @@
     @media (max-width: 920px) {
       .layout { grid-template-columns: 1fr; }
       .summary-grid { grid-template-columns: 1fr; }
+      .detail-grid, .detail-stack { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -281,6 +320,10 @@
         <div id="client-list" class="client-list">
           <div class="empty">Nenhum cliente carregado ainda.</div>
         </div>
+        <div id="client-detail" class="detail-card">
+          <div class="eyebrow">Cliente selecionado</div>
+          <div class="empty">Selecione um cliente para ver agendamentos e historico ja salvos.</div>
+        </div>
       </section>
     </main>
   </div>
@@ -298,9 +341,11 @@
     const saveClientButton = document.getElementById('save-client');
     const pendingList = document.getElementById('pending-list');
     const pendingSummary = document.getElementById('pending-summary');
+    const clientDetail = document.getElementById('client-detail');
     const PENDING_CLIENTS_KEY = 'homewash.pendingClients';
     let cachedClients = [];
     let apiAvailable = false;
+    let selectedClientName = '';
 
     function normalizeBaseUrl(url) {
       return auth.normalizeBaseUrl(url);
@@ -318,6 +363,75 @@
     function setApiStatus(ok, label) {
       apiStatus.textContent = label;
       apiStatus.classList.toggle('offline', !ok);
+    }
+
+    function formatCurrency(value) {
+      return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function scheduleStatus(item) {
+      return item && item.servico_realizado ? 'Concluido' : 'Pendente';
+    }
+
+    function renderClientDetailState(message) {
+      clientDetail.innerHTML = `
+        <div class="eyebrow">Cliente selecionado</div>
+        <div class="empty">${message}</div>
+      `;
+    }
+
+    function renderClientDetail(payload) {
+      const data = payload || {};
+      const client = data.client || {};
+      const stats = data.stats || {};
+      const schedules = Array.isArray(data.schedules) ? data.schedules : [];
+      const history = Array.isArray(data.history) ? data.history : [];
+
+      clientDetail.innerHTML = `
+        <div class="eyebrow">Cliente selecionado</div>
+        <h3 style="margin:0;">${client.nome || 'Cliente sem nome'}</h3>
+        <p class="small-note" style="margin-top:8px;">Telefone: ${client.telefone || '-'} | E-mail: ${client.email || '-'} | Proxima agenda: ${client.proxima_agenda || '-'}</p>
+        <div class="detail-grid">
+          <article class="summary-chip"><span>Agendamentos</span><strong>${stats.agendamentos_total || 0}</strong></article>
+          <article class="summary-chip"><span>Pendentes</span><strong>${stats.agendamentos_pendentes || 0}</strong></article>
+          <article class="summary-chip"><span>Concluidos</span><strong>${stats.agendamentos_concluidos || 0}</strong></article>
+          <article class="summary-chip"><span>Historico</span><strong>${stats.historico_total || 0}</strong></article>
+        </div>
+        <div class="detail-grid" style="margin-top:0;">
+          <article class="summary-chip"><span>Faturamento confirmado</span><strong style="font-size:1.15rem;">${formatCurrency(stats.faturamento_confirmado || 0)}</strong></article>
+          <article class="summary-chip"><span>Valor estimado no historico</span><strong style="font-size:1.15rem;">${formatCurrency(stats.valor_estimado || 0)}</strong></article>
+          <article class="summary-chip"><span>Criado por</span><strong style="font-size:1.05rem;">${client.criado_por || '-'}</strong></article>
+          <article class="summary-chip"><span>Cadastro</span><strong style="font-size:1.05rem;">${client.data_cadastro || '-'}</strong></article>
+        </div>
+        <div class="detail-stack">
+          <section>
+            <h4 style="margin:0;">Agendamentos</h4>
+            <div class="detail-list">
+              ${schedules.length ? schedules.map((item) => `
+                <article class="detail-item">
+                  <strong>${item.data_agendada || '-'} ${item.horario ? `| ${item.horario}` : ''}</strong>
+                  <span>Status: ${scheduleStatus(item)}</span>
+                  <span>Responsavel: ${item.responsavel_nome || '-'}</span>
+                  <span>Observacao: ${item.observacao || '-'}</span>
+                </article>
+              `).join('') : '<div class="empty">Nenhum agendamento encontrado para este cliente.</div>'}
+            </div>
+          </section>
+          <section>
+            <h4 style="margin:0;">Historico de servicos e orcamentos</h4>
+            <div class="detail-list">
+              ${history.length ? history.map((item) => `
+                <article class="detail-item">
+                  <strong>${item.data || '-'} | ${item.servico || 'Servico nao informado'}</strong>
+                  <span>Pagamento: ${item.forma_pagamento || 'Nao definido'} | Cobrado: ${formatCurrency(item.valor_cobrado || 0)}</span>
+                  <span>Valor estimado PIX: ${formatCurrency(item.total_pix || 0)} | Cartao: ${formatCurrency(item.total_cartao || 0)}</span>
+                  <span>Detalhes: ${item.tipo || '-'} | ${item.largura || '-'} | Sujidade ${item.sujidade || '-'}</span>
+                </article>
+              `).join('') : '<div class="empty">Nenhum historico encontrado para este cliente.</div>'}
+            </div>
+          </section>
+        </div>
+      `;
     }
 
     function getPendingClients() {
@@ -426,7 +540,25 @@
       document.getElementById('criado-por').value = client.criado_por || '';
       document.getElementById('notas').value = client.notas || '';
       syncFormMode();
+      loadClientDetail(nome);
       setFlash(`Formulario preenchido com os dados de ${nome}.`, 'success');
+    }
+
+    async function loadClientDetail(nome) {
+      const targetName = String(nome || '').trim();
+      if (!targetName) {
+        selectedClientName = '';
+        renderClientDetailState('Selecione um cliente para ver agendamentos e historico ja salvos.');
+        return;
+      }
+      selectedClientName = targetName;
+      try {
+        const payload = await apiFetch(`/api/clients/detail?nome=${encodeURIComponent(targetName)}`);
+        renderClientDetail(payload.data || {});
+      } catch (error) {
+        renderClientDetailState('Nao foi possivel carregar o detalhe deste cliente agora.');
+        setFlash(error.message, 'error');
+      }
     }
 
     function renderClientSummary(items) {
@@ -473,11 +605,16 @@
           <span class="client-meta">Criado por: ${item.criado_por || '-'}</span>
           <span class="client-meta">Notas: ${item.notas || '-'}</span>
           <div class="actions" style="margin-top: 12px;">
+            <button type="button" class="secondary" data-detail="${encodeURIComponent(item.nome || '')}">Ver historico</button>
             <button type="button" class="secondary" data-fill="${encodeURIComponent(item.nome || '')}">Editar no formulario</button>
             <button type="button" class="danger" data-delete="${encodeURIComponent(item.nome || '')}">Excluir</button>
           </div>
         </article>
       `).join('');
+
+      clientList.querySelectorAll('[data-detail]').forEach((button) => {
+        button.addEventListener('click', () => loadClientDetail(decodeURIComponent(button.dataset.detail || '')));
+      });
 
       clientList.querySelectorAll('[data-fill]').forEach((button) => {
         button.addEventListener('click', () => fillClientForm(decodeURIComponent(button.dataset.fill || '')));
@@ -504,6 +641,15 @@
       cachedClients = payload.data || [];
       auth.rememberClientList(cachedClients);
       renderClients(cachedClients);
+      if (selectedClientName) {
+        const stillExists = cachedClients.some((item) => item.nome === selectedClientName);
+        if (stillExists) {
+          await loadClientDetail(selectedClientName);
+        } else {
+          selectedClientName = '';
+          renderClientDetailState('Selecione um cliente para ver agendamentos e historico ja salvos.');
+        }
+      }
     }
 
     function isAuthRelatedError(error) {
@@ -516,13 +662,21 @@
         await apiFetch('/health');
         apiAvailable = true;
         setApiStatus(true, 'API conectada');
+        if (!auth.hasValidSession()) {
+          renderClients([]);
+          renderPendingClients();
+          renderClientDetailState('Sem login no momento. Voce pode cadastrar offline ou entrar para carregar a base online.');
+          setFlash('API conectada. Sem login ativo, a tela fica em modo offline local.', 'success');
+          return;
+        }
         try {
           await loadClients();
         } catch (error) {
           if (isAuthRelatedError(error)) {
             renderClients([]);
             renderPendingClients();
-            setFlash('API conectada. Faca login novamente para carregar os clientes.', 'error');
+            renderClientDetailState('Sua sessao nao esta valida. Entre novamente para carregar a base online.');
+            setFlash('API conectada. Sua sessao expirou e a tela voltou para modo offline local.', 'success');
             return;
           }
           throw error;
@@ -546,7 +700,7 @@
           setFlash('A edicao web ainda nao permite renomear cliente existente. Mantenha o mesmo nome ou limpe o formulario para criar outro cadastro.', 'error');
           return;
         }
-        if (!apiAvailable) {
+        if (!apiAvailable || !auth.hasValidSession()) {
           auth.rememberClientName(payload.nome);
           queueClient(payload);
           setFlash(`Cliente ${payload.nome} salvo offline para sincronizar depois.`, 'success');
@@ -583,6 +737,10 @@
       }
       if (!apiAvailable) {
         setFlash('A sincronizacao precisa de API online.', 'error');
+        return;
+      }
+      if (!auth.hasValidSession()) {
+        setFlash('Entre na web antes de sincronizar os clientes pendentes.', 'error');
         return;
       }
 
@@ -628,6 +786,7 @@
     document.getElementById('criado-por').value = 'Operacao Local';
     syncFormMode();
     renderPendingClients();
+    renderClientDetailState('Selecione um cliente para ver agendamentos e historico ja salvos.');
     testApi();
   </script>
 </body>

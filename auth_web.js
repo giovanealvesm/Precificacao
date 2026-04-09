@@ -1,12 +1,14 @@
 (function () {
   const API_URL_KEY = 'homewash.apiUrl';
+  const SESSION_KEY = 'homewash.authSession';
   const USER_KEY = 'homewash.authUser';
   const KNOWN_CLIENTS_KEY = 'homewash.knownClients';
+  const PROTECTED_PAGES = new Set(['dashboard.html', 'agendamentos.html', 'sync.html']);
   const DEFAULT_USER = {
     login: 'operacao-local',
-    nome: 'Operacao Local',
+    nome: 'Sessao nao iniciada',
     email: '',
-    is_admin: true,
+    is_admin: false,
   };
 
   function normalizeBaseUrl(url) {
@@ -51,11 +53,41 @@
     return getConfiguredApiUrl();
   }
 
+  function getStoredSession() {
+    const raw = localStorage.getItem(SESSION_KEY) || '';
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      return parsed;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function getToken() {
-    return '';
+    const session = getStoredSession();
+    return String((session && session.token) || '').trim();
+  }
+
+  function isSessionExpired(session) {
+    const expiresAt = String((session && session.expires_at) || '').trim();
+    if (!expiresAt) return true;
+    const timestamp = Date.parse(expiresAt);
+    if (Number.isNaN(timestamp)) return true;
+    return timestamp <= Date.now();
+  }
+
+  function hasValidSession() {
+    const session = getStoredSession();
+    return Boolean(session && session.token && !isSessionExpired(session));
   }
 
   function getStoredUser() {
+    const session = getStoredSession();
+    if (session && session.user) {
+      return { ...DEFAULT_USER, ...session.user };
+    }
     const raw = localStorage.getItem(USER_KEY) || '';
     if (!raw) return { ...DEFAULT_USER };
     try {
@@ -66,11 +98,37 @@
   }
 
   function setSession(data) {
-    localStorage.setItem(USER_KEY, JSON.stringify({ ...DEFAULT_USER, ...(data.user || {}) }));
+    const session = {
+      token: String((data && data.token) || '').trim(),
+      expires_at: String((data && data.expires_at) || '').trim(),
+      user: { ...DEFAULT_USER, ...((data && data.user) || {}) },
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(USER_KEY, JSON.stringify(session.user));
   }
 
   function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
     localStorage.setItem(USER_KEY, JSON.stringify(DEFAULT_USER));
+  }
+
+  function getCurrentPage() {
+    const path = String(window.location.pathname || '').split('/').pop();
+    return path || 'index.html';
+  }
+
+  function isProtectedPage() {
+    return PROTECTED_PAGES.has(getCurrentPage());
+  }
+
+  function buildLoginUrl(nextPage) {
+    const next = String(nextPage || `${getCurrentPage()}${window.location.search || ''}`).trim();
+    if (!next || next === 'login.html') return 'login.html';
+    return `login.html?next=${encodeURIComponent(next)}`;
+  }
+
+  function redirectToLogin(nextPage) {
+    window.location.href = buildLoginUrl(nextPage);
   }
 
   function readArray(key) {
@@ -121,9 +179,20 @@
     }
 
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${base}${path}`, { ...options, headers });
     const payload = await response.json().catch(() => ({}));
+
+    if (response.status === 401) {
+      clearSession();
+      if (isProtectedPage()) {
+        redirectToLogin();
+      }
+    }
 
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.error || 'Falha ao falar com a API.');
@@ -132,24 +201,88 @@
     return payload;
   }
 
-  function buildLoginUrl() {
-    return 'dashboard.html';
-  }
+  async function requireAuth(options = {}) {
+    const settings = { redirectOnFail: true, ...(options || {}) };
+    if (!hasValidSession()) {
+      clearSession();
+      if (settings.redirectOnFail) {
+        redirectToLogin();
+      }
+      throw new Error('Faca login para continuar.');
+    }
 
-  async function requireAuth() {
-    const user = getStoredUser();
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-    return { user, expires_at: '' };
+    const session = getStoredSession();
+    try {
+      const payload = await apiFetch('/api/auth/me');
+      const nextSession = {
+        token: session.token,
+        expires_at: payload.data && payload.data.expires_at ? payload.data.expires_at : session.expires_at,
+        user: payload.data && payload.data.user ? payload.data.user : session.user,
+      };
+      setSession(nextSession);
+      return nextSession;
+    } catch (error) {
+      clearSession();
+      if (settings.redirectOnFail) {
+        redirectToLogin();
+      }
+      throw error;
+    }
   }
 
   async function login(usuario, senha) {
-    const nome = String(usuario || '').trim() || DEFAULT_USER.nome;
-    const data = { user: { ...DEFAULT_USER, login: nome.toLowerCase().replace(/\s+/g, '-'), nome } };
+    const base = getApiBase();
+    if (!base) {
+      throw new Error('Informe a URL da API antes de fazer login.');
+    }
+
+    const response = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario, senha }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || 'Falha ao fazer login.');
+    }
     setSession(data);
-    return { ...data, expires_at: '' };
+    return data;
+  }
+
+  async function register(payload) {
+    const base = getApiBase();
+    if (!base) {
+      throw new Error('Informe a URL da API antes de criar o acesso.');
+    }
+
+    const response = await fetch(`${base}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || 'Falha ao criar o acesso.');
+    }
+    setSession(data);
+    return data;
   }
 
   async function logout() {
+    const base = getApiBase();
+    const token = getToken();
+    if (base && token) {
+      try {
+        await fetch(`${base}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch (error) {
+      }
+    }
     clearSession();
   }
 
@@ -169,18 +302,26 @@
     return next;
   }
 
+  if (isProtectedPage()) {
+    requireAuth().catch(() => {});
+  }
+
   window.HomeWashAuth = {
     apiFetch,
     bindApiInput,
+    buildLoginUrl,
     clearSession,
     getApiBase,
     getNextPage,
     getStoredUser,
     getToken,
+    hasValidSession,
+    isProtectedPage,
     login,
     listKnownClients,
     logout,
     normalizeBaseUrl,
+    register,
     rememberClientList,
     rememberClientName,
     requireAuth,
